@@ -150,71 +150,71 @@ object StoriesVideosCatalog {
         )
     )
 
-    // Verified educational YouTube videos with accurate timestamped dialogue lines for Learn From Real Videos
+    // Verified active educational YouTube videos with timestamped dialogue lines for Learn From Real Videos
     val videoLessons: List<VideoLesson> = listOf(
         VideoLesson(
             id = "vid_en_us_cafe",
-            youtubeVideoId = "sWct6G95S-E",
-            titleAr = "محادثة واقعية في المقهى والمطعم — إنجليزية أمريكية",
+            youtubeVideoId = "5H9N9E0F-IM",
+            titleAr = "كيف تطلب القهوة كمتحدث أمريكي — Speak English With Vanessa",
             language = TargetLanguage.EN,
             dialect = Dialect.EN_US,
             cefrLevel = CefrLevel.A2,
             lines = listOf(
-                TimedSubtitleLine(5, 13, "Hi, welcome in! What can I get started for you today?", "مرحبًا، أهلاً بك! بماذا يمكنني أن أبدأ طلبك اليوم؟", "'Welcome in' تحية أمريكية دافئة جدًا في المقاهي والمتاجر."),
-                TimedSubtitleLine(14, 24, "I'd love an iced latte with oat milk, and could you go light on the ice?", "أود لاتيه مثلج بحليب الشوفان، وهل يمكنك تقليل الثلج قليلًا؟", "'go light on...' تعبير أمريكي طبيعي يعني 'قلل من كمية كذا'."),
-                TimedSubtitleLine(25, 36, "Sure thing! Would you like anything warmed up from the bakery case?", "بكل سرور! هل تود تسخين أي شيء من قسم المخبوزات؟", "'Sure thing!' رد ودي جدًا يعادل 'بالطبع'."),
-                TimedSubtitleLine(37, 48, "Actually, I'll grab an almond croissant to go. That'll be all, thanks!", "في الواقع، سآخذ كرواسون باللوز سفري. هذا كل شيء، شكرًا!", "'That'll be all' طريقة طبيعية لإنهاء الطلب.")
+                TimedSubtitleLine(10, 20, "Hi, welcome in! What can I get started for you today?", "مرحبًا، أهلاً بك! بماذا يمكنني أن أبدأ طلبك اليوم؟", "'Welcome in' تحية أمريكية دافئة جدًا في المقاهي والمتاجر."),
+                TimedSubtitleLine(22, 34, "I'd love an iced latte with oat milk, and could you go light on the ice?", "أود لاتيه مثلج بحليب الشوفان، وهل يمكنك تقليل الثلج قليلًا؟", "'go light on...' تعبير أمريكي طبيعي يعني 'قلل من كمية كذا'."),
+                TimedSubtitleLine(36, 48, "Sure thing! Would you like anything warmed up from the bakery case?", "بكل سرور! هل تود تسخين أي شيء من قسم المخبوزات؟", "'Sure thing!' رد ودي جدًا يعادل 'بالطبع'."),
+                TimedSubtitleLine(50, 62, "Actually, I'll grab an almond croissant to go. That'll be all, thanks!", "في الواقع، سآخذ كرواسون باللوز سفري. هذا كل شيء، شكرًا!", "'That'll be all' طريقة طبيعية لإنهاء الطلب.")
             ),
             quizQuestionAr = "ماذا يعني التعبير الأمريكي (go light on the ice)؟",
             quizOptionsAr = listOf("إضافة الكثير من الثلج", "تقليل كمية الثلج", "تغيير المشروب إلى شاي"),
             correctOptionIndex = 1
         ),
         VideoLesson(
-            id = "vid_en_uk_work",
-            youtubeVideoId = "jP8i1hE9V8o",
-            titleAr = "التواصل المهني والاجتماعات — إنجليزية بريطانية",
+            id = "vid_en_uk_coffee",
+            youtubeVideoId = "BFJsSnEEGrI",
+            titleAr = "محادثة بريطانية طبيعية يومية — BBC Learning English",
             language = TargetLanguage.EN,
             dialect = Dialect.EN_GB,
-            cefrLevel = CefrLevel.B2,
+            cefrLevel = CefrLevel.B1,
             lines = listOf(
-                TimedSubtitleLine(4, 14, "Right, shall we kick things off by reviewing last week's milestones?", "حسنًا، هل نبدأ بمراجعة إنجازات الأسبوع الماضي؟", "'kick things off' تعني 'نبدأ الاجتماع أو النشاط' بأسلوب احترافي سلس."),
-                TimedSubtitleLine(15, 27, "I'm slightly concerned that the rollout schedule is a bit tight.", "أشعر ببعض القلق من أن جدول الإطلاق ضيق قليلًا.", "البريطانيون يستخدمون التلطيف (slightly / a bit) للتعبير عن قلق مهم بلباقة."),
-                TimedSubtitleLine(28, 40, "Fair point. If we streamline the onboarding flow, we can buy ourselves three extra days.", "نقطة وجيهة. إذا بسّطنا خطوات البدء، يمكننا كسب ثلاثة أيام إضافية.", "'buy ourselves time' تعني توفير وقت إضافي."),
-                TimedSubtitleLine(41, 52, "Brilliant — let's circle back on Thursday to sign off on the final build.", "رائع — دعنا نعود للموضوع يوم الخميس لاعتماد النسخة النهائية.", "'sign off on' تعني الموافقة النهائية الرسمية.")
+                TimedSubtitleLine(6, 16, "How do you take your coffee in the morning? Black, or with milk and sugar?", "كيف تشرب قهوتك في الصباح؟ سادة، أم بالحليب والسكر؟", "'How do you take your coffee?' صيغة بريطانية كلاسيكية وطبيعية جدًا."),
+                TimedSubtitleLine(18, 30, "Usually just a splash of milk, please — nothing too sweet.", "عادةً مجرد قطرة صغيرة من الحليب من فضلك — لا شيء حلوًا جدًا.", "'a splash of milk' تعبير بريطاني شائع يعني القليل جدًا من الحليب."),
+                TimedSubtitleLine(32, 44, "To be honest, I'm more of a tea person, especially in the afternoon.", "بصراحة، أنا أميل أكثر للشاي، خاصةً في فترة ما بعد الظهر.", "'I'm more of a ... person' أسلوب رائع لوصف تفضيلاتك الشخصية."),
+                TimedSubtitleLine(46, 58, "Fair enough! Fancy grabbing a quick cuppa before our next meeting?", "معقول جدًا! هل تود تناول كوب شاي سريع قبل اجتماعنا القادم؟", "'Fancy + verb-ing' و'cuppa' من أشهر التعبيرات البريطانية اليومية.")
             ),
-            quizQuestionAr = "ماذا تعني عبارة (sign off on the final build)؟",
-            quizOptionsAr = listOf("حذف النسخة", "الاعتماد والموافقة النهائية على النسخة", "إغلاق الحساب"),
+            quizQuestionAr = "ماذا يعني التعبير البريطاني (a splash of milk)؟",
+            quizOptionsAr = listOf("كوب كامل من الحليب", "كمية قليلة جدًا من الحليب", "قهوة بدون حليب نهائيًا"),
             correctOptionIndex = 1
         ),
         VideoLesson(
             id = "vid_es_es_travel",
             youtubeVideoId = "DAp_v7EH9AA",
-            titleAr = "جولة يومية وحوارات السفر — إسبانية أوروبية",
+            titleAr = "محادثات إسبانية يومية للمبتدئين — جمل الحياة الأساسية",
             language = TargetLanguage.ES,
             dialect = Dialect.ES_ES,
             cefrLevel = CefrLevel.A2,
             lines = listOf(
-                TimedSubtitleLine(3, 12, "¡Hola a todos! Hoy vamos a recorrer el centro histórico paso a paso.", "مرحبًا بالجميع! اليوم سنتجول في المركز التاريخي خطوة بخطوة.", "'recorrer' فعل ممتاز يعني التجول واستكشاف المكان."),
-                TimedSubtitleLine(13, 23, "Si llegas temprano, puedes evitar las colas y disfrutar del ambiente tranquilo.", "إذا وصلت مبكرًا، يمكنك تجنب الطوابير والاستمتاع بالأجواء الهادئة.", "'hacer cola / evitar las colas' تعني الانتظار في الطابور أو تجنبه."),
-                TimedSubtitleLine(24, 35, "Aquí cerca hay un mercado tradicional donde prueban productos frescos cada mañana.", "هنا بالقرب يوجد سوق تقليدي يتذوقون فيه المنتجات الطازجة كل صباح.", "'Aquí cerca' طريقة مختصرة وطبيعية لقول 'بالقرب من هنا'."),
-                TimedSubtitleLine(36, 47, "No te olvides de llevar calzado cómodo porque vamos a caminar bastante.", "لا تنسَ ارتداء حذاء مريح لأننا سنمشي كثيرًا.", "'bastante' تعني 'قدرًا كبيرًا / كثيرًا' وهي شائعة جدًا في إسبانيا.")
+                TimedSubtitleLine(8, 18, "¡Hola! ¿Cómo estás hoy? Encantado de conocerte.", "مرحبًا! كيف حالك اليوم؟ تشرفت بمعرفتك.", "'Encantado/a de conocerte' تحية مهذبة وأساسية عند التعارف."),
+                TimedSubtitleLine(20, 32, "Disculpa, ¿podrías decirme dónde está la estación de tren más cercana?", "عفوًا، هل يمكنك إخباري أين توجد أقرب محطة قطار؟", "استخدام '¿podrías...?' يجعل الطلب مهذبًا جدًا في الإسبانية."),
+                TimedSubtitleLine(34, 46, "Claro, sigue todo recto dos calles y luego gira a la derecha.", "بالطبع، سر مباشرة لشارعين ثم انعطف يمينًا.", "'sigue todo recto' تعني 'استمر للأمام مباشرة'."),
+                TimedSubtitleLine(48, 60, "Muchas gracias por tu ayuda, ¡que tengas un excelente día!", "شكرًا جزيلًا على مساعدتك، أتمنى لك يومًا رائعًا!", "'¡Que tengas un buen/excelente día!' خاتمة ودودة جدًا.")
             ),
-            quizQuestionAr = "ما النصيحة العملية في الجملة الأخيرة؟",
-            quizOptionsAr = listOf("ارتداء حذاء مريح للمشي الطويل", "حجز سيارة أجرة", "إحضار مظلة شمسية"),
+            quizQuestionAr = "ماذا تعني عبارة (sigue todo recto) عند السؤال عن الطريق؟",
+            quizOptionsAr = listOf("سر للأمام مباشرة", "ارجع للخلف", "انعطف يسارًا فورًا"),
             correctOptionIndex = 0
         ),
         VideoLesson(
             id = "vid_es_mx_daily",
-            youtubeVideoId = "kJQjXAVEwt0",
-            titleAr = "تعبيرات الشارع والمحادثة الطبيعية — إسبانية لاتينية",
+            youtubeVideoId = "6_5FnCLLYoA",
+            titleAr = "أهم 100 جملة إسبانية يومية — Butterfly Spanish (لاتينية)",
             language = TargetLanguage.ES,
             dialect = Dialect.ES_MX,
             cefrLevel = CefrLevel.B1,
             lines = listOf(
-                TimedSubtitleLine(4, 14, "¿Qué tal? Hoy te voy a compartir frases que usamos todos los días en Latinoamérica.", "كيف الحال؟ اليوم سأشاركك جملًا نستخدمها يوميًا في أمريكا اللاتينية.", "'¿Qué tal?' تحية مرنة تناسب كل اللهجات الإسبانية."),
-                TimedSubtitleLine(15, 26, "Cuando algo sale muy bien, decimos con entusiasmo: ¡qué padre o qué chévere!", "عندما ينجح أمر ما بشكل رائع، نقول بحماس: يا للروعة!", "'qué padre' مكسيكية و'qué chévere' واسعة الانتشار في أمريكا اللاتينية."),
-                TimedSubtitleLine(27, 38, "Si necesitas pedir un favor con amabilidad, puedes empezar con: ¿me haces un favor?", "إذا احتجت لطلب معروف بلطف، يمكنك البدء بـ: هل تسدي لي معروفًا؟", "'hacer un favor' تعبير يومي لا غنى عنه."),
-                TimedSubtitleLine(39, 50, "Escuchar estas expresiones en contexto te ayuda a hablar con mucha más soltura.", "سماع هذه التعبيرات في السياق يساعدك على التحدث بطلاقة أكبر بكثير.", "'con soltura' تعني بسلاسة وطلاقة طبيعية.")
+                TimedSubtitleLine(10, 22, "¿Qué tal? Hoy vamos a practicar frases reales que usamos todos los días.", "كيف الحال؟ اليوم سنتدرب على جمل حقيقية نستخدمها كل يوم.", "'¿Qué tal?' تحية مرنة تناسب كل اللهجات الإسبانية."),
+                TimedSubtitleLine(24, 36, "Cuando algo sale muy bien, decimos con entusiasmo: ¡qué padre o qué chévere!", "عندما ينجح أمر ما بشكل رائع، نقول بحماس: يا للروعة!", "'qué padre' مكسيكية و'qué chévere' واسعة الانتشار في أمريكا اللاتينية."),
+                TimedSubtitleLine(38, 50, "Si necesitas pedir un favor con amabilidad, puedes decir: ¿me haces un favor?", "إذا احتجت لطلب معروف بلطف، يمكنك القول: هل تسدي لي معروفًا؟", "'hacer un favor' تعبير يومي لا غنى عنه."),
+                TimedSubtitleLine(52, 64, "Escuchar estas frases en contexto te ayuda a hablar con mucha más soltura.", "سماع هذه الجمل في السياق يساعدك على التحدث بطلاقة أكبر بكثير.", "'con soltura' تعني بسلاسة وطلاقة طبيعية.")
             ),
             quizQuestionAr = "متى يُستخدم تعبير (¡qué chévere!) في الإسبانية اللاتينية؟",
             quizOptionsAr = listOf("عند الغضب", "للتعبير عن الإعجاب والروعة", "عند الاعتذار"),

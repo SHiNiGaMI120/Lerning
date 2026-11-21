@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.GraphicEq
@@ -339,7 +340,30 @@ fun HomeDashboardScreen(
             )
         }
 
-        // 3. Quick Overview of Current Language Progress (English & Spanish)
+        // 3. Guided 4-Step Daily Mission (Clear logical direction — never get lost!)
+        item {
+            val hasStoryOrVideo = lessonProgress.any { it.completed && (it.contentType == "story" || it.contentType == "video") }
+            val hasLessonDone = (enLessonsDone + esLessonsDone) > 0
+            val hasSpeakingDone = pronunciationLogs.isNotEmpty()
+            val hasReviewOrExamDone = examAttempts.isNotEmpty() || (reviewCards.isNotEmpty() && dueCardsCount == 0)
+
+            GuidedDailyJourneyCard(
+                step1Done = hasLessonDone,
+                step2Done = hasStoryOrVideo,
+                step3Done = hasSpeakingDone,
+                step4Done = hasReviewOrExamDone,
+                dueCardsCount = dueCardsCount,
+                onStep1 = { onContinueLastLesson(activeLesson) },
+                onStep2 = { onNavigate(LingoDestination.STORIES) },
+                onStep3 = { onNavigate(LingoDestination.AI_TUTOR) },
+                onStep4 = {
+                    if (dueCardsCount > 0) onNavigate(LingoDestination.REVIEW)
+                    else onNavigate(LingoDestination.TESTS)
+                }
+            )
+        }
+
+        // 4. Quick Overview of Current Language Progress (English & Spanish)
         item {
             SectionHeader(
                 title = stringResource(R.string.home_languages_title),
@@ -386,7 +410,7 @@ fun HomeDashboardScreen(
             }
         }
 
-        // Daily Stats & Smart Recommendation
+        // 5. Compact Daily Metrics Row
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -416,104 +440,270 @@ fun HomeDashboardScreen(
             }
         }
 
-        // Smart AI Recommendation Banner
-        item {
-            ElevatedCard(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (dueCardsCount > 0) onNavigate(LingoDestination.REVIEW)
-                        else if (examAttempts.isEmpty()) onNavigate(LingoDestination.TESTS)
-                        else onNavigate(LingoDestination.STORIES)
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Psychology,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiary
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "توصية ذكية لخطوتك الآن",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                        val recText = when {
-                            dueCardsCount > 0 -> "لديك $dueCardsCount جملة مستحقة للمراجعة الذكية اليوم لتثبيت الإتقان."
-                            examAttempts.isEmpty() -> "ابدأ باختبار تحديد المستوى (Placement Test) لتحديد مستواك الدقيق في CEFR."
-                            else -> "جرّب قصة تفاعلية جديدة أو جلسة تفكير عميق مع المدرس الذكي لرفع طلاقتك."
-                        }
-                        Text(
-                            text = recText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.88f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Complete 13-Section Quick Access Hub
+        // 6. Logically Grouped Learning Hub (3 clear categories instead of a crowded grid)
         item {
             SectionHeader(
-                title = "أقسام المنصة الكاملة",
-                subtitle = "وصول مباشر لكل أدوات التعلم من الهاتف"
+                title = "1) التعلّم والاستيعاب",
+                subtitle = "ابدأ بالمسار التفاعلي ثم طبّق بالقصص والفيديوهات"
             )
-            Spacer(Modifier.height(10.dp))
-            val quickItems = buildList {
-                add(Triple(LingoDestination.LEARNING, Icons.Filled.MenuBook, "12 وحدة • جمل سياقية"))
-                add(Triple(LingoDestination.STORIES, Icons.Filled.AutoStories, "قصص تفاعلية + AI"))
-                add(Triple(LingoDestination.VIDEOS, Icons.Filled.OndemandVideo, "فيديوهات YouTube موقّتة"))
-                add(Triple(LingoDestination.PRONUNCIATION, Icons.Filled.GraphicEq, "تقييم النطق + Shadowing"))
-                add(Triple(LingoDestination.AI_TUTOR, Icons.Filled.AutoAwesome, "محادثة + تفكير عميق"))
-                add(Triple(LingoDestination.SKILLS, Icons.Filled.Bolt, "المهارات الأربع"))
-                add(Triple(LingoDestination.TESTS, Icons.Filled.FactCheck, "اختبارات CEFR الصعبة"))
-                add(Triple(LingoDestination.REVIEW, Icons.Filled.Replay, "المراجعة الذكية FSRS"))
-                add(Triple(LingoDestination.PROGRESS, Icons.Filled.TrendingUp, "التقدم والشارات"))
-                add(Triple(LingoDestination.SETTINGS, Icons.Filled.Settings, "اللهجة والمظهر"))
+            Spacer(Modifier.height(8.dp))
+            FeatureTileGrid(
+                items = listOf(
+                    Triple(LingoDestination.LEARNING, Icons.Filled.MenuBook, "خريطة المراحل ولعبة الجمل"),
+                    Triple(LingoDestination.STORIES, Icons.Filled.AutoStories, "قصص تفاعلية + AI"),
+                    Triple(LingoDestination.VIDEOS, Icons.Filled.OndemandVideo, "فيديوهات YouTube حقيقية")
+                ),
+                onNavigate = onNavigate
+            )
+        }
+
+        item {
+            SectionHeader(
+                title = "2) الممارسة والتحدث الحي",
+                subtitle = "تكلّم بصوتك واحصل على تصحيح فوري"
+            )
+            Spacer(Modifier.height(8.dp))
+            FeatureTileGrid(
+                items = listOf(
+                    Triple(LingoDestination.AI_TUTOR, Icons.Filled.AutoAwesome, "محادثة + تقييم الأخطاء"),
+                    Triple(LingoDestination.PRONUNCIATION, Icons.Filled.GraphicEq, "سجّل صوتك ودرّب نطقك"),
+                    Triple(LingoDestination.SKILLS, Icons.Filled.Bolt, "تدريبات المهارات الأربع")
+                ),
+                onNavigate = onNavigate
+            )
+        }
+
+        item {
+            SectionHeader(
+                title = "3) التثبيت والاختبارات",
+                subtitle = "راجع ما حفظته وارتقِ لمستوى CEFR الأعلى"
+            )
+            Spacer(Modifier.height(8.dp))
+            val evaluationItems = buildList {
+                add(Triple(LingoDestination.REVIEW, Icons.Filled.Replay, "بطاقات المراجعة الذكية"))
+                add(Triple(LingoDestination.TESTS, Icons.Filled.FactCheck, "اختبارات CEFR والشهادة"))
+                add(Triple(LingoDestination.SETTINGS, Icons.Filled.Settings, "اللهجة والهدف والمظهر"))
                 if (isAdmin) {
-                    add(Triple(LingoDestination.ADMIN, Icons.Filled.AdminPanelSettings, "إدارة المحتوى CMS"))
+                    add(Triple(LingoDestination.ADMIN, Icons.Filled.AdminPanelSettings, "لوحة الإدارة والمحتوى"))
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                quickItems.chunked(2).forEach { pair ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        pair.forEach { (dest, icon, sub) ->
-                            QuickFeatureTile(
-                                title = dest.labelAr,
-                                subtitle = sub,
-                                icon = icon,
-                                onClick = { onNavigate(dest) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("hub_tile_${dest.route}")
-                            )
+            FeatureTileGrid(items = evaluationItems, onNavigate = onNavigate)
+        }
+    }
+}
+
+@Composable
+private fun GuidedDailyJourneyCard(
+    step1Done: Boolean,
+    step2Done: Boolean,
+    step3Done: Boolean,
+    step4Done: Boolean,
+    dueCardsCount: Int,
+    onStep1: () -> Unit,
+    onStep2: () -> Unit,
+    onStep3: () -> Unit,
+    onStep4: () -> Unit
+) {
+    val completedSteps = listOf(step1Done, step2Done, step3Done, step4Done).count { it }
+    val nextStepIndex = listOf(step1Done, step2Done, step3Done, step4Done).indexOfFirst { !it }.let {
+        if (it == -1) 3 else it
+    }
+
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.42f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("home_guided_daily_journey")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "خريطة يومك (ابدأ بالترتيب)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "اتّبع الخطوات الأربع بالترتيب حتى لا تتشتت",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                StatusPill(
+                    text = "$completedSteps / 4",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { (completedSteps / 4f).coerceAtLeast(0.08f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp)
+                    .clip(RoundedCornerShape(100.dp))
+            )
+
+            GuidedStepRow(
+                number = 1,
+                title = "العب درس اليوم التفاعلي",
+                subtitle = "اسمع الجملة ← ركّبها كلعبة ← اكسب النجوم (+40 XP)",
+                done = step1Done,
+                highlighted = nextStepIndex == 0,
+                onClick = onStep1,
+                testTag = "guided_step_1"
+            )
+            GuidedStepRow(
+                number = 2,
+                title = "عِش اللغة في قصة تفاعلية",
+                subtitle = "اختر ردودك وغيّر أحداث القصة (+40 XP)",
+                done = step2Done,
+                highlighted = nextStepIndex == 1,
+                onClick = onStep2,
+                testTag = "guided_step_2"
+            )
+            GuidedStepRow(
+                number = 3,
+                title = "تحدّث مع المدرس الذكي",
+                subtitle = "محادثة قصيرة مع تصحيح فوري بالعربية (+25 XP)",
+                done = step3Done,
+                highlighted = nextStepIndex == 2,
+                onClick = onStep3,
+                testTag = "guided_step_3"
+            )
+            GuidedStepRow(
+                number = 4,
+                title = if (dueCardsCount > 0) "راجع $dueCardsCount جملة مستحقة الآن" else "اختبر مستواك في CEFR",
+                subtitle = if (dueCardsCount > 0) "تثبيت سريع بذكاء FSRS (+30 XP)" else "احصل على تقييم رسمي وشهادة (+50 XP)",
+                done = step4Done,
+                highlighted = nextStepIndex == 3,
+                onClick = onStep4,
+                testTag = "guided_step_4"
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuidedStepRow(
+    number: Int,
+    title: String,
+    subtitle: String,
+    done: Boolean,
+    highlighted: Boolean,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = when {
+            highlighted -> MaterialTheme.colorScheme.primaryContainer
+            done -> MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            else -> MaterialTheme.colorScheme.surface
+        },
+        border = if (highlighted) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = Modifier
+            .fillMaxWidth()
+            .minimumInteractiveComponentSize()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            done -> MaterialTheme.colorScheme.primary
+                            highlighted -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.surfaceVariant
                         }
-                        if (pair.size == 1) {
-                            Spacer(Modifier.weight(1f))
-                        }
-                    }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (done) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = "مكتمل",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Text(
+                        text = "$number",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (highlighted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = when {
+                    done -> "تم ✓"
+                    highlighted -> "ابدأ ←"
+                    else -> "افتح"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeatureTileGrid(
+    items: List<Triple<LingoDestination, ImageVector, String>>,
+    onNavigate: (LingoDestination) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items.chunked(2).forEach { pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                pair.forEach { (dest, icon, sub) ->
+                    QuickFeatureTile(
+                        title = dest.labelAr,
+                        subtitle = sub,
+                        icon = icon,
+                        onClick = { onNavigate(dest) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("hub_tile_${dest.route}")
+                    )
+                }
+                if (pair.size == 1) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }

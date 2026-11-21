@@ -1,11 +1,11 @@
 package com.example.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,24 +13,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.BookmarkAdd
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,11 +55,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.AudioClipRecorder
 import com.example.core.SpeechEngine
@@ -71,10 +72,17 @@ import com.example.data.model.UserProfile
 import com.example.ui.components.AudioSpeedButtons
 import com.example.ui.components.ErrorBannerCard
 import com.example.ui.components.LtrTargetText
-import com.example.ui.components.SectionHeader
 import com.example.ui.components.StatusPill
 import com.example.ui.viewmodel.AiOpState
 import com.example.ui.viewmodel.AiTutorViewModel
+
+private data class NextGameLessonTarget(
+    val unitNumber: Int,
+    val lessonNumber: Int,
+    val unitTitleAr: String,
+    val lessonTitleAr: String,
+    val completedCountInLevel: Int
+)
 
 @Composable
 fun CurriculumAndSentenceScreen(
@@ -99,15 +107,32 @@ fun CurriculumAndSentenceScreen(
     val activeDialect = Dialect.fromCode(profile.currentDialectCode(), activeLang)
     val currentSubLevel = profile.currentSubLevel()
 
-    var selectedUnitNumber by remember(activeLang, activeLevel) { mutableIntStateOf(1) }
-    var selectedLessonNumber by remember(activeLang, activeLevel, selectedUnitNumber) { mutableIntStateOf(1) }
+    val units = remember(activeLang, activeLevel) {
+        CurriculumCatalog.unitsFor(activeLang, activeLevel)
+    }
+    val completedIds = remember(lessonProgress) {
+        lessonProgress.filter { it.completed }.map { it.id }.toSet()
+    }
+    val nextTarget = remember(units, completedIds, activeLang, activeLevel) {
+        findNextLessonTarget(units, completedIds, activeLang, activeLevel)
+    }
+
+    var selectedUnitNumber by remember(activeLang, activeLevel) {
+        mutableIntStateOf(nextTarget.unitNumber)
+    }
+    var selectedLessonNumber by remember(activeLang, activeLevel) {
+        mutableIntStateOf(nextTarget.lessonNumber)
+    }
+    var activeLessonTitle by remember { mutableStateOf(nextTarget.lessonTitleAr) }
     var activeSentenceStudio by remember { mutableStateOf<List<SentenceLessonItem>?>(null) }
     var generatingUnitNo by remember { mutableIntStateOf(0) }
+    var showTrackSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(resumeLessonRequest) {
         val req = resumeLessonRequest ?: return@LaunchedEffect
         selectedUnitNumber = req.unitNumber
         selectedLessonNumber = req.lessonNumber
+        activeLessonTitle = req.lessonTitleAr
         activeSentenceStudio = CurriculumCatalog.sentencesFor(
             language = req.language,
             level = req.level,
@@ -119,12 +144,6 @@ fun CurriculumAndSentenceScreen(
 
     val aiUnitLessonState by aiViewModel.generatedUnitLessonState.collectAsStateWithLifecycle()
 
-    val units = remember(activeLang, activeLevel) {
-        CurriculumCatalog.unitsFor(activeLang, activeLevel)
-    }
-    val completedIds = remember(lessonProgress) {
-        lessonProgress.filter { it.completed }.map { it.id }.toSet()
-    }
     val publishedSentencesFromCms = remember(cmsItems, activeLang, activeLevel) {
         cmsItems.filter {
             it.published &&
@@ -135,7 +154,8 @@ fun CurriculumAndSentenceScreen(
     }
 
     if (activeSentenceStudio != null) {
-        SentenceStudioView(
+        LessonGameView(
+            lessonTitleAr = activeLessonTitle,
             sentences = activeSentenceStudio!!,
             dialect = activeDialect,
             speechEngine = speechEngine,
@@ -160,121 +180,233 @@ fun CurriculumAndSentenceScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // 1) Active Level Hero Game Card (First thing the user sees — clear Level 1 entry)
         item {
-            SectionHeader(
-                title = "منهج CEFR المتكامل",
-                subtitle = "12 وحدة × 10 دروس × 10 ليفلات لكل مستوى (A1 إلى C2)",
-                badge = "${activeLang.arabicName} • ${activeLevel.code}"
-            )
-        }
-
-        // Language & Dialect Selector
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TargetLanguage.entries.forEach { lang ->
-                        FilterChip(
-                            selected = activeLang == lang,
-                            onClick = { onSwitchLanguage(lang) },
-                            label = { Text("${lang.arabicName} (${lang.nativeName})") },
-                            modifier = Modifier.testTag("lang_chip_${lang.code}")
-                        )
-                    }
-                }
-                val dialects = Dialect.entries.filter { it.language == activeLang }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    dialects.forEach { dialect ->
-                        FilterChip(
-                            selected = activeDialect == dialect,
-                            onClick = { onSelectDialect(dialect) },
-                            label = { Text(dialect.arabicLabel) },
-                            modifier = Modifier.testTag("dialect_chip_${dialect.code}")
-                        )
-                    }
-                }
-            }
-        }
-
-        // CEFR A1-C2 Selector
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(CefrLevel.entries) { level ->
-                    FilterChip(
-                        selected = activeLevel == level,
-                        onClick = { onSelectLevel(activeLang, level) },
-                        label = { Text("${level.code} • ${level.arabicTitle}") },
-                        modifier = Modifier.testTag("cefr_chip_${level.code}")
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "معيار ${activeLevel.code}: ${activeLevel.summaryAr}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Interactive 10-SubLevel Progression Ladder inside the active CEFR Level
-        item {
-            val tierLabelAr = when (currentSubLevel) {
-                in 1..3 -> "مرحلة التأسيس وبناء الجمل الأساسية"
-                in 4..6 -> "مرحلة الترسيخ والتوسّع في المواقف اليومية"
-                in 7..9 -> "مرحلة الطلاقة والتعامل مع الحوارات المركّبة"
-                else -> "مرحلة الإتقان — جاهز للاختبار النهائي للمستوى!"
-            }
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)),
+            ElevatedCard(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "سُلّم الليفلات داخل ${activeLevel.code}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        StatusPill("الليفل $currentSubLevel / 10")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Filled.SportsEsports,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "رحلة التعلّم باللعب",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "${activeLang.arabicName} (${activeDialect.arabicLabel}) • ${activeLevel.code}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        StatusPill("ليفل $currentSubLevel / 10")
                     }
-                    LinearProgressIndicator(
-                        progress = { (currentSubLevel / 10f).coerceIn(0.1f, 1f) },
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "كيف تلعب؟ كل درس 3 جولات سريعة: استمع وافهم ← ركّب الكلمات كاللعبة ← اجتز تحدي الفهم واجمع النجوم!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+
+                    // Progress inside current CEFR level
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "تقدمك في مستوى ${activeLevel.code}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${nextTarget.completedCountInLevel} / 120 درس مكتمل",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { (nextTarget.completedCountInLevel / 120f).coerceIn(0.03f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(100.dp))
+                        )
+                    }
+
+                    // Primary Play Next Lesson CTA
+                    Button(
+                        onClick = {
+                            selectedUnitNumber = nextTarget.unitNumber
+                            selectedLessonNumber = nextTarget.lessonNumber
+                            activeLessonTitle = nextTarget.lessonTitleAr
+                            activeSentenceStudio = CurriculumCatalog.sentencesFor(
+                                activeLang,
+                                activeLevel,
+                                nextTarget.unitNumber,
+                                nextTarget.lessonNumber
+                            )
+                        },
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(100.dp))
-                    )
-                    Text(
-                        text = tierLabelAr,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items((1..10).toList()) { sub ->
-                            val isCurrent = sub == currentSubLevel
-                            val isPassed = sub < currentSubLevel
-                            FilterChip(
-                                selected = isCurrent,
-                                onClick = { onSelectSubLevel(activeLang, sub) },
-                                label = {
-                                    Text(
-                                        text = if (isPassed) "✓ ليفل $sub" else "ليفل $sub",
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
-                                modifier = Modifier.testTag("sublevel_chip_$sub")
-                            )
+                            .height(54.dp)
+                            .testTag("play_next_lesson_btn")
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "العب الآن: الوحدة ${nextTarget.unitNumber} • الدرس ${nextTarget.lessonNumber}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+
+                    // Compact Settings Toggle (keeps the map clean and uncluttered)
+                    OutlinedButton(
+                        onClick = { showTrackSettings = !showTrackSettings },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("toggle_track_settings_btn")
+                    ) {
+                        Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (showTrackSettings) "إخفاء إعدادات اللغة والمستوى" else "تغيير اللغة أو اللهجة أو المستوى (${activeLevel.code})",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            if (showTrackSettings) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2) Collapsible Track Settings Panel (Language, Dialect, CEFR A1-C2, 10 SubLevels)
+        item {
+            AnimatedVisibility(visible = showTrackSettings) {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("اختر اللغة واللهجة:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TargetLanguage.entries.forEach { lang ->
+                                FilterChip(
+                                    selected = activeLang == lang,
+                                    onClick = { onSwitchLanguage(lang) },
+                                    label = { Text("${lang.arabicName} (${lang.nativeName})") },
+                                    modifier = Modifier.testTag("lang_chip_${lang.code}")
+                                )
+                            }
+                        }
+                        val dialects = Dialect.entries.filter { it.language == activeLang }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            dialects.forEach { dialect ->
+                                FilterChip(
+                                    selected = activeDialect == dialect,
+                                    onClick = { onSelectDialect(dialect) },
+                                    label = { Text(dialect.arabicLabel) },
+                                    modifier = Modifier.testTag("dialect_chip_${dialect.code}")
+                                )
+                            }
+                        }
+
+                        HorizontalDivider()
+
+                        Text("مستوى CEFR (من A1 للمبتدئ حتى C2):", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(CefrLevel.entries) { level ->
+                                FilterChip(
+                                    selected = activeLevel == level,
+                                    onClick = { onSelectLevel(activeLang, level) },
+                                    label = { Text("${level.code} • ${level.arabicTitle}") },
+                                    modifier = Modifier.testTag("cefr_chip_${level.code}")
+                                )
+                            }
+                        }
+                        Text(
+                            text = "معيار ${activeLevel.code}: ${activeLevel.summaryAr}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        HorizontalDivider()
+
+                        Text("سُلّم الليفلات داخل ${activeLevel.code} (الليفل $currentSubLevel / 10):", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items((1..10).toList()) { sub ->
+                                val isCurrent = sub == currentSubLevel
+                                val isPassed = sub < currentSubLevel
+                                FilterChip(
+                                    selected = isCurrent,
+                                    onClick = { onSelectSubLevel(activeLang, sub) },
+                                    label = {
+                                        Text(
+                                            text = if (isPassed) "✓ ليفل $sub" else "ليفل $sub",
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("sublevel_chip_$sub")
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Admin-Published Cloud CMS Sentences (if any exist for this track/level)
+        // 3) Admin-Published Cloud CMS Sentences (if any exist for this track/level)
         if (publishedSentencesFromCms.isNotEmpty()) {
             item {
                 Card(
@@ -301,11 +433,56 @@ fun CurriculumAndSentenceScreen(
             }
         }
 
-        // 12 CEFR Units with 10 Lessons each
+        // 4) Stepping Game Map Header
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Flag,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "خريطة المراحل (${activeLevel.code})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                Text(
+                    text = "12 مرحلة × 10 دروس",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // 5) 12 Visual Game Units with Stepping Lesson Nodes
         items(units, key = { it.number }) { unit ->
             val isExpanded = selectedUnitNumber == unit.number
+            val isCurrentUnit = unit.number == nextTarget.unitNumber
+            val doneInUnit = (1..unit.lessonTitlesAr.size).count { lNo ->
+                val pid = "${activeLang.code.lowercase()}_${activeLevel.code.lowercase()}_u${unit.number}_l$lNo"
+                completedIds.contains(pid)
+            }
+            val unitCompleted = doneInUnit >= unit.lessonTitlesAr.size
+
             ElevatedCard(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = when {
+                        isCurrentUnit -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        unitCompleted -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                        else -> MaterialTheme.colorScheme.surface
+                    }
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -314,44 +491,252 @@ fun CurriculumAndSentenceScreen(
                             .fillMaxWidth()
                             .clickable {
                                 selectedUnitNumber = if (isExpanded) 0 else unit.number
-                            },
+                            }
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            // Stage Number Node
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when {
+                                            unitCompleted -> MaterialTheme.colorScheme.primary
+                                            isCurrentUnit -> MaterialTheme.colorScheme.tertiary
+                                            else -> MaterialTheme.colorScheme.surfaceVariant
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                StatusPill("الوحدة ${unit.number}")
-                                StatusPill(
-                                    text = unit.themeTagAr,
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
+                                if (unitCompleted) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = "مرحلة مكتملة",
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Text(
+                                        text = "${unit.number}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (isCurrentUnit) MaterialTheme.colorScheme.onTertiary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = unit.titleAr,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "المرحلة ${unit.number}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (isCurrentUnit) {
+                                        StatusPill(
+                                            text = "أنت هنا",
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                    } else {
+                                        StatusPill(
+                                            text = unit.themeTagAr,
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = unit.titleAr,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    LinearProgressIndicator(
+                                        progress = { (doneInUnit.toFloat() / unit.lessonTitlesAr.size.coerceAtLeast(1)).coerceIn(0f, 1f) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(100.dp))
+                                    )
+                                    Text(
+                                        text = "$doneInUnit/${unit.lessonTitlesAr.size}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
+
                         Icon(
                             imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = "عرض دروس الوحدة"
+                            contentDescription = "عرض دروس المرحلة"
                         )
                     }
 
                     if (isExpanded) {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
                         HorizontalDivider()
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
+
+                        // Stepping Game Lesson Nodes
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            unit.lessonTitlesAr.forEachIndexed { idx, lessonTitle ->
+                                val lessonNo = idx + 1
+                                val progressId = "${activeLang.code.lowercase()}_${activeLevel.code.lowercase()}_u${unit.number}_l$lessonNo"
+                                val done = completedIds.contains(progressId)
+                                val isNextUp = unit.number == nextTarget.unitNumber && lessonNo == nextTarget.lessonNumber
+
+                                Card(
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = when {
+                                            isNextUp -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
+                                            done -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                                            else -> MaterialTheme.colorScheme.surfaceContainerLow
+                                        }
+                                    ),
+                                    border = if (isNextUp) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 56.dp)
+                                        .clickable {
+                                            selectedUnitNumber = unit.number
+                                            selectedLessonNumber = lessonNo
+                                            activeLessonTitle = lessonTitle
+                                            activeSentenceStudio = CurriculumCatalog.sentencesFor(
+                                                activeLang, activeLevel, unit.number, lessonNo
+                                            )
+                                        }
+                                        .testTag("lesson_u${unit.number}_l$lessonNo")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        when {
+                                                            done -> MaterialTheme.colorScheme.primary
+                                                            isNextUp -> MaterialTheme.colorScheme.tertiary
+                                                            else -> MaterialTheme.colorScheme.surfaceVariant
+                                                        }
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                when {
+                                                    done -> Icon(
+                                                        Icons.Filled.Check,
+                                                        contentDescription = "مكتمل",
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    isNextUp -> Icon(
+                                                        Icons.Filled.PlayArrow,
+                                                        contentDescription = "دورك الآن",
+                                                        tint = MaterialTheme.colorScheme.onTertiary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                    else -> Text(
+                                                        text = "$lessonNo",
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = lessonTitle,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = if (isNextUp) FontWeight.ExtraBold else FontWeight.Medium
+                                                )
+                                                if (isNextUp) {
+                                                    Text(
+                                                        text = "دورك الآن • 3 جولات تفاعلية (+40 XP)",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        when {
+                                            done -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Filled.Star,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.tertiary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(2.dp))
+                                                Text(
+                                                    text = "مكتمل",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            isNextUp -> Surface(
+                                                shape = RoundedCornerShape(100.dp),
+                                                color = MaterialTheme.colorScheme.primary
+                                            ) {
+                                                Text(
+                                                    text = "العب ▶",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                                )
+                                            }
+                                            else -> Text(
+                                                text = "ابدأ",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // AI Bonus Challenge Generator for this Unit
                         val isGeneratingThisUnit = aiUnitLessonState is AiOpState.Loading && generatingUnitNo == unit.number
-                        Button(
+                        OutlinedButton(
                             onClick = {
                                 generatingUnitNo = unit.number
+                                selectedUnitNumber = unit.number
                                 selectedLessonNumber = currentSubLevel
+                                activeLessonTitle = "تحدي الذكاء الاصطناعي • ${unit.titleAr}"
                                 aiViewModel.generateUnitLesson(
                                     language = activeLang,
                                     dialect = activeDialect,
@@ -367,79 +752,25 @@ fun CurriculumAndSentenceScreen(
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = 48.dp)
                                 .testTag("generate_unit_lesson_u${unit.number}")
                         ) {
                             if (isGeneratingThisUnit) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.size(8.dp))
-                                Text("جاري توليد 4 جمل جديدة بالذكاء الاصطناعي...")
+                                Text("جاري تجهيز تحدي ذكي جديد...")
                             } else {
                                 Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.size(6.dp))
-                                Text("توليد درس جمل جديد بالذكاء الاصطناعي (ليفل $currentSubLevel)")
+                                Text("تحدي إضافي بالذكاء الاصطناعي (4 جمل جديدة)")
                             }
                         }
                         if (aiUnitLessonState is AiOpState.Error && generatingUnitNo == unit.number) {
                             Spacer(Modifier.height(6.dp))
                             ErrorBannerCard((aiUnitLessonState as AiOpState.Error).message)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            unit.lessonTitlesAr.forEachIndexed { idx, lessonTitle ->
-                                val lessonNo = idx + 1
-                                val progressId = "${activeLang.code.lowercase()}_${activeLevel.code.lowercase()}_u${unit.number}_l$lessonNo"
-                                val done = completedIds.contains(progressId)
-                                Card(
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (done) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedLessonNumber = lessonNo
-                                            activeSentenceStudio = CurriculumCatalog.sentencesFor(
-                                                activeLang, activeLevel, unit.number, lessonNo
-                                            )
-                                        }
-                                        .testTag("lesson_u${unit.number}_l$lessonNo")
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (done) Icons.Filled.CheckCircle else Icons.Filled.PlayArrow,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Text(
-                                                text = lessonTitle,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                        Text(
-                                            text = if (done) "مكتمل" else "ابدأ",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -448,245 +779,40 @@ fun CurriculumAndSentenceScreen(
     }
 }
 
-@Composable
-private fun SentenceStudioView(
-    sentences: List<SentenceLessonItem>,
-    dialect: Dialect,
-    speechEngine: SpeechEngine,
-    audioRecorder: AudioClipRecorder,
-    onSaveToReview: (SentenceLessonItem) -> Unit,
-    onPracticePronunciation: (String) -> Unit,
-    onCompleteLesson: (Int) -> Unit,
-    onBack: () -> Unit
-) {
-    val context = LocalContext.current
-    var currentIndex by remember { mutableIntStateOf(0) }
-    var selectedAnswer by remember(currentIndex) { mutableStateOf<Int?>(null) }
-    var correctCount by remember { mutableIntStateOf(0) }
-    val item = sentences[currentIndex]
+private fun findNextLessonTarget(
+    units: List<com.example.data.model.CurriculumUnit>,
+    completedIds: Set<String>,
+    language: TargetLanguage,
+    level: CefrLevel
+): NextGameLessonTarget {
+    var totalCompleted = 0
+    var firstIncomplete: NextGameLessonTarget? = null
 
-    LaunchedEffect(currentIndex) {
-        audioRecorder.resetClip()
-    }
-
-    val isRecordingClip by audioRecorder.isRecording.collectAsStateWithLifecycle()
-    val isPlayingClip by audioRecorder.isPlaying.collectAsStateWithLifecycle()
-    val hasRecordedClip by audioRecorder.hasRecording.collectAsStateWithLifecycle()
-    val recordingSeconds by audioRecorder.recordingSeconds.collectAsStateWithLifecycle()
-    val recorderError by audioRecorder.error.collectAsStateWithLifecycle()
-
-    val micLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            audioRecorder.startRecording("sent_${item.id}")
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(onClick = onBack) {
-                    Text("العودة للوحدات")
-                }
-                StatusPill("الجملة ${currentIndex + 1} من ${sentences.size} • ${dialect.arabicLabel}")
-            }
-        }
-
-        // Core Sentence Card (Sentence-Based Learning — NEVER isolated words)
-        item {
-            ElevatedCard(
-                shape = RoundedCornerShape(22.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    LtrTargetText(item.sentence, bold = true)
-                    Text(
-                        text = item.arabicTranslation,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "بديل اللهجة الأخرى: ${item.dialectVariantAlt}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    AudioSpeedButtons(
-                        onPlayNormal = { speechEngine.speak(item.sentence, dialect.code, slow = false) },
-                        onPlaySlow = { speechEngine.speak(item.sentence, dialect.code, slow = true) }
-                    )
-
-                    // Inline Learner Voice Recording & Playback inside Sentence Lesson
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                if (isRecordingClip) {
-                                    audioRecorder.stopRecording()
-                                } else {
-                                    val granted = ContextCompat.checkSelfPermission(
-                                        context, Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                    if (granted) {
-                                        audioRecorder.startRecording("sent_${item.id}")
-                                    } else {
-                                        micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isRecordingClip) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.weight(1f).testTag("sentence_record_voice_btn")
-                        ) {
-                            Icon(
-                                if (isRecordingClip) Icons.Filled.Stop else Icons.Filled.FiberManualRecord,
-                                contentDescription = "تسجيل صوتك",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.size(4.dp))
-                            Text(if (isRecordingClip) "إيقاف (${recordingSeconds}ث)" else "سجّل صوتك")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                if (isPlayingClip) audioRecorder.stopPlayback() else audioRecorder.playRecording()
-                            },
-                            enabled = hasRecordedClip && !isRecordingClip,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.weight(1f).testTag("sentence_play_voice_btn")
-                        ) {
-                            Icon(
-                                if (isPlayingClip) Icons.Filled.Stop else Icons.Filled.PlayArrow,
-                                contentDescription = "سماع تسجيلك",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.size(4.dp))
-                            Text(if (isPlayingClip) "إيقاف" else "اسمع تسجيلك")
-                        }
-                    }
-                    if (!recorderError.isNullOrBlank()) {
-                        Text(recorderError.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { onSaveToReview(item) },
-                            modifier = Modifier.weight(1f).testTag("save_sentence_fsrs_btn")
-                        ) {
-                            Icon(Icons.Filled.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(4.dp))
-                            Text("حفظ للمراجعة")
-                        }
-                        OutlinedButton(
-                            onClick = { onPracticePronunciation(item.sentence) },
-                            modifier = Modifier.weight(1f).testTag("sentence_to_pronunciation_btn")
-                        ) {
-                            Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(4.dp))
-                            Text("مختبر النطق")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Contextual Grammar, Expressions & Real-World Usage
-        item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("شرح التعبيرات:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(item.expressionNoteAr, style = MaterialTheme.typography.bodyMedium)
-                    HorizontalDivider()
-                    Text("القواعد داخل السياق:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(item.grammarInContextAr, style = MaterialTheme.typography.bodyMedium)
-                    HorizontalDivider()
-                    Text("الاستخدام الواقعي:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(item.realWorldUsageAr, style = MaterialTheme.typography.bodyMedium)
-                    HorizontalDivider()
-                    Text("أمثلة مشابهة من الحياة اليومية:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    item.similarExamples.forEach { (enOrEs, ar) ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { speechEngine.speak(enOrEs, dialect.code, slow = false) }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            LtrTargetText(enOrEs)
-                            Text(ar, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Comprehension Check
-        item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("اختبار فهم الجملة:", fontWeight = FontWeight.Bold)
-                    Text(item.comprehensionQuestionAr, style = MaterialTheme.typography.bodyMedium)
-                    item.optionsAr.forEachIndexed { idx, opt ->
-                        val picked = selectedAnswer == idx
-                        val isCorrect = idx == item.correctOptionIndex
-                        val bgColor = when {
-                            selectedAnswer == null -> MaterialTheme.colorScheme.surface
-                            picked && isCorrect -> MaterialTheme.colorScheme.primaryContainer
-                            picked && !isCorrect -> MaterialTheme.colorScheme.errorContainer
-                            isCorrect -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                            else -> MaterialTheme.colorScheme.surface
-                        }
-                        Card(
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = bgColor),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = selectedAnswer == null) {
-                                    selectedAnswer = idx
-                                    if (idx == item.correctOptionIndex) correctCount++
-                                }
-                        ) {
-                            Text(opt, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Button(
-                onClick = {
-                    if (currentIndex < sentences.lastIndex) {
-                        currentIndex++
-                    } else {
-                        val finalScore = ((correctCount.coerceAtLeast(1) * 100) / sentences.size).coerceIn(70, 100)
-                        onCompleteLesson(finalScore)
-                    }
-                },
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp).testTag("sentence_next_or_finish_btn")
-            ) {
-                Text(
-                    text = if (currentIndex < sentences.lastIndex) "الجملة التالية" else "إنهاء الدرس وتسجيل الإنجاز (+40 XP)",
-                    fontWeight = FontWeight.Bold
+    units.forEach { unit ->
+        unit.lessonTitlesAr.forEachIndexed { idx, lessonTitle ->
+            val lessonNo = idx + 1
+            val progressId = "${language.code.lowercase()}_${level.code.lowercase()}_u${unit.number}_l$lessonNo"
+            if (completedIds.contains(progressId)) {
+                totalCompleted++
+            } else if (firstIncomplete == null) {
+                firstIncomplete = NextGameLessonTarget(
+                    unitNumber = unit.number,
+                    lessonNumber = lessonNo,
+                    unitTitleAr = unit.titleAr,
+                    lessonTitleAr = lessonTitle,
+                    completedCountInLevel = 0
                 )
             }
         }
     }
+
+    val fallbackUnit = units.firstOrNull()
+    val chosen = firstIncomplete ?: NextGameLessonTarget(
+        unitNumber = fallbackUnit?.number ?: 1,
+        lessonNumber = 1,
+        unitTitleAr = fallbackUnit?.titleAr ?: "الوحدة 1",
+        lessonTitleAr = fallbackUnit?.lessonTitlesAr?.firstOrNull() ?: "الدرس 1",
+        completedCountInLevel = totalCompleted
+    )
+    return chosen.copy(completedCountInLevel = totalCompleted)
 }

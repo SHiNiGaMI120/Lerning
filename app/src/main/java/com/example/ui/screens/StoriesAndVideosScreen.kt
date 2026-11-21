@@ -1,6 +1,10 @@
 package com.example.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.view.View
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -25,10 +29,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -57,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -497,6 +504,7 @@ fun RealVideosScreen(
     onSaveSentence: (String, String, String) -> Unit,
     onCompleteVideo: (VideoLesson) -> Unit
 ) {
+    val context = LocalContext.current
     val activeLang = profile.currentLanguageEnum()
     val videos = remember(activeLang, cmsItems) {
         val cmsVideos = cmsItems
@@ -510,6 +518,7 @@ fun RealVideosScreen(
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var activeLineIndex by remember(selectedVideo.id) { mutableStateOf(0) }
     var quizChoice by remember(selectedVideo.id) { mutableStateOf<Int?>(null) }
+    var reloadNonce by remember(selectedVideo.id) { mutableStateOf(0) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     LazyColumn(
@@ -520,7 +529,7 @@ fun RealVideosScreen(
         item {
             SectionHeader(
                 title = "التعلم من فيديوهات حقيقية",
-                subtitle = "اضغط على أي جملة للقفز تلقائيًا إلى توقيتها في مشغل YouTube IFrame",
+                subtitle = "اضغط زر التشغيل في الفيديو، أو اضغط على أي جملة للقفز إلى توقيتها وسماعها فورًا",
                 badge = selectedVideo.cefrLevel.code
             )
             Spacer(Modifier.height(8.dp))
@@ -535,23 +544,32 @@ fun RealVideosScreen(
             }
         }
 
-        // Real Embedded YouTube IFrame Player API WebView
-        item(key = "yt_${selectedVideo.youtubeVideoId}") {
+        // Real Embedded YouTube IFrame Player API WebView (direct iframe for instant thumbnail & playback)
+        item(key = "yt_${selectedVideo.youtubeVideoId}_$reloadNonce") {
             Card(
                 shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Black),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 AndroidView(
                     factory = { ctx ->
                         WebView(ctx).apply {
+                            setBackgroundColor(android.graphics.Color.BLACK)
+                            setLayerType(View.LAYER_TYPE_HARDWARE, null)
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.mediaPlaybackRequiresUserGesture = false
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            settings.javaScriptCanOpenWindowsAutomatically = true
                             settings.cacheMode = WebSettings.LOAD_DEFAULT
+                            CookieManager.getInstance().setAcceptCookie(true)
+                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                             webChromeClient = WebChromeClient()
                             webViewClient = WebViewClient()
                             loadDataWithBaseURL(
-                                "https://www.youtube.com",
+                                "https://www.lingoworld.app",
                                 buildYouTubeIframeHtml(selectedVideo.youtubeVideoId),
                                 "text/html",
                                 "utf-8",
@@ -565,11 +583,43 @@ fun RealVideosScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
+                        .height(225.dp)
                 )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Text(selectedVideo.titleAr, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { reloadNonce++ },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f).testTag("video_reload_btn")
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("تحديث المشغّل")
+                }
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://www.youtube.com/watch?v=${selectedVideo.youtubeVideoId}")
+                            )
+                            context.startActivity(intent)
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f).testTag("video_open_youtube_btn")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("فتح في YouTube")
+                }
+            }
         }
 
         // Speed Controls, Single-Line Loop & Hide Transcript Toggle
@@ -758,24 +808,30 @@ private fun buildYouTubeIframeHtml(videoId: String): String = """
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
   html, body { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
-  #player { width: 100%; height: 100%; }
+  iframe { width: 100%; height: 100%; border: 0; display: block; }
 </style>
 </head>
 <body>
-<div id="player"></div>
+<iframe
+  id="ytplayer"
+  type="text/html"
+  src="https://www.youtube-nocookie.com/embed/$videoId?enablejsapi=1&playsinline=1&rel=0&modestbranding=1&origin=https://www.lingoworld.app"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen>
+</iframe>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
-  var player;
+  var player = null;
   var stopTimer = null;
   function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
-      height: '100%',
-      width: '100%',
-      videoId: '$videoId',
-      playerVars: { 'playsinline': 1, 'rel': 0, 'modestbranding': 1 }
+    player = new YT.Player('ytplayer', {
+      events: {
+        'onReady': function() {}
+      }
     });
   }
   function seekAndPlay(startSec, endSec) {
@@ -783,7 +839,7 @@ private fun buildYouTubeIframeHtml(videoId: String): String = """
     stopLoop();
     player.seekTo(startSec, true);
     player.playVideo();
-    var durationMs = Math.max(2000, (endSec - startSec) * 1000);
+    var durationMs = Math.max(2500, (endSec - startSec) * 1000);
     stopTimer = setTimeout(function() {
       if (player && player.pauseVideo) player.pauseVideo();
     }, durationMs);
