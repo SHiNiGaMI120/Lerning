@@ -1,0 +1,234 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated learner profile storing language tracks, dialects, CEFR levels, XP, streaks, and daily goals.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the learner." },
+        "displayName": { "type": "string", "description": "Display name shown in Arabic RTL UI." },
+        "activeLanguage": { "type": "string", "enum": ["EN", "ES"] },
+        "englishDialect": { "type": "string", "enum": ["en-US", "en-GB"] },
+        "spanishDialect": { "type": "string", "enum": ["es-ES", "es-MX"] },
+        "englishLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "spanishLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "englishSubLevel": { "type": "integer", "description": "Sub-level 1..10 within English CEFR level." },
+        "spanishSubLevel": { "type": "integer", "description": "Sub-level 1..10 within Spanish CEFR level." },
+        "xp": { "type": "integer", "description": "Total earned XP points." },
+        "streakDays": { "type": "integer", "description": "Consecutive active learning days." },
+        "dailyGoalMinutes": { "type": "integer", "description": "Daily study goal in minutes (5..180)." },
+        "listeningMinutes": { "type": "integer", "description": "Accumulated listening practice minutes." },
+        "completedLessonsCount": { "type": "integer", "description": "Count of completed lessons." },
+        "role": { "type": "string", "enum": ["learner", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": [
+        "userId", "displayName", "activeLanguage", "englishDialect", "spanishDialect",
+        "englishLevel", "spanishLevel", "englishSubLevel", "spanishSubLevel",
+        "xp", "streakDays", "dailyGoalMinutes", "listeningMinutes", "completedLessonsCount",
+        "role", "createdAt", "updatedAt"
+      ]
+    },
+    "ReviewCard": {
+      "title": "ReviewCard",
+      "description": "FSRS Spaced Repetition sentence review card belonging to a learner.",
+      "type": "object",
+      "properties": {
+        "sentenceText": { "type": "string" },
+        "arabicTranslation": { "type": "string" },
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "dialect": { "type": "string" },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "grammarNote": { "type": "string" },
+        "masteryScore": { "type": "integer" },
+        "stabilityDays": { "type": "number" },
+        "difficulty": { "type": "number" },
+        "reviewCount": { "type": "integer" },
+        "lapseCount": { "type": "integer" },
+        "pronunciationScore": { "type": "integer" },
+        "nextReviewEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": [
+        "sentenceText", "arabicTranslation", "language", "dialect", "cefrLevel",
+        "grammarNote", "masteryScore", "stabilityDays", "difficulty", "reviewCount",
+        "lapseCount", "pronunciationScore", "nextReviewEpochMs", "createdAt", "updatedAt"
+      ]
+    },
+    "TutorMessage": {
+      "title": "TutorMessage",
+      "description": "Multi-turn AI Tutor conversation message with optional deep thinking analysis.",
+      "type": "object",
+      "properties": {
+        "scenarioId": { "type": "string" },
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "sender": { "type": "string", "enum": ["user", "tutor"] },
+        "text": { "type": "string" },
+        "arabicExplanation": { "type": "string" },
+        "deepThinking": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["scenarioId", "language", "sender", "text", "arabicExplanation", "deepThinking", "createdAt"]
+    },
+    "ExamAttempt": {
+      "title": "ExamAttempt",
+      "description": "CEFR four-skill exam attempt enforcing 25% per skill, 80% total, and 70% per-skill pass threshold.",
+      "type": "object",
+      "properties": {
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "examType": { "type": "string", "enum": ["placement", "lesson", "unit", "sublevel", "final"] },
+        "listeningScore": { "type": "integer" },
+        "speakingScore": { "type": "integer" },
+        "readingScore": { "type": "integer" },
+        "writingScore": { "type": "integer" },
+        "totalScore": { "type": "integer" },
+        "passed": { "type": "boolean" },
+        "aiFeedback": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": [
+        "language", "cefrLevel", "examType", "listeningScore", "speakingScore",
+        "readingScore", "writingScore", "totalScore", "passed", "aiFeedback", "createdAt"
+      ]
+    },
+    "PronunciationLog": {
+      "title": "PronunciationLog",
+      "description": "Pronunciation Lab assessment result with accuracy, stress, rhythm, fluency, clarity, and Arabic coaching.",
+      "type": "object",
+      "properties": {
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "dialect": { "type": "string" },
+        "targetSentence": { "type": "string" },
+        "recognizedText": { "type": "string" },
+        "accuracyScore": { "type": "integer" },
+        "stressScore": { "type": "integer" },
+        "rhythmScore": { "type": "integer" },
+        "fluencyScore": { "type": "integer" },
+        "clarityScore": { "type": "integer" },
+        "arabicCoaching": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": [
+        "language", "dialect", "targetSentence", "recognizedText", "accuracyScore",
+        "stressScore", "rhythmScore", "fluencyScore", "clarityScore", "arabicCoaching", "createdAt"
+      ]
+    },
+    "LessonProgress": {
+      "title": "LessonProgress",
+      "description": "Completed curriculum unit, lesson, story, video, or skill record.",
+      "type": "object",
+      "properties": {
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "unitNumber": { "type": "integer" },
+        "lessonNumber": { "type": "integer" },
+        "contentType": { "type": "string", "enum": ["lesson", "story", "video", "skill"] },
+        "completed": { "type": "boolean" },
+        "score": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": [
+        "language", "cefrLevel", "unitNumber", "lessonNumber", "contentType",
+        "completed", "score", "createdAt", "updatedAt"
+      ]
+    },
+    "CmsContentItem": {
+      "title": "CmsContentItem",
+      "description": "Admin-managed CMS curriculum item (sentence, story, YouTube video, or exam question).",
+      "type": "object",
+      "properties": {
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "dialect": { "type": "string" },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "unitNumber": { "type": "integer" },
+        "contentType": { "type": "string", "enum": ["sentence", "story", "video", "exam_question"] },
+        "title": { "type": "string" },
+        "bodyText": { "type": "string" },
+        "arabicTranslation": { "type": "string" },
+        "grammarNote": { "type": "string" },
+        "youtubeVideoId": { "type": "string" },
+        "published": { "type": "boolean" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": [
+        "language", "dialect", "cefrLevel", "unitNumber", "contentType", "title",
+        "bodyText", "arabicTranslation", "grammarNote", "youtubeVideoId",
+        "published", "authorId", "createdAt", "updatedAt"
+      ]
+    },
+    "SavedStory": {
+      "title": "SavedStory",
+      "description": "Permanently saved AI-generated interactive branching story belonging to a learner.",
+      "type": "object",
+      "properties": {
+        "language": { "type": "string", "enum": ["EN", "ES"] },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "genreAr": { "type": "string" },
+        "titleAr": { "type": "string" },
+        "subtitleTarget": { "type": "string" },
+        "storyJson": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["language", "cefrLevel", "genreAr", "titleAr", "subtitleTarget", "storyJson", "createdAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Optional opt-in public leaderboard ranking entry exposing only non-sensitive learner display name and XP stats.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "activeLanguage": { "type": "string", "enum": ["EN", "ES"] },
+        "activeLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "xp": { "type": "integer" },
+        "streakDays": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "activeLanguage", "activeLevel", "xp", "streakDays", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User learning profile and stats isolated per authenticated user."
+    },
+    "/users/{userId}/reviewCards/{cardId}": {
+      "schema": { "$ref": "#/entities/ReviewCard" },
+      "description": "Per-user FSRS spaced repetition sentence review cards."
+    },
+    "/users/{userId}/tutorMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/TutorMessage" },
+      "description": "Per-user AI Tutor conversation thread messages."
+    },
+    "/users/{userId}/examAttempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/ExamAttempt" },
+      "description": "Per-user CEFR four-skill exam and placement test results."
+    },
+    "/users/{userId}/pronunciationLogs/{logId}": {
+      "schema": { "$ref": "#/entities/PronunciationLog" },
+      "description": "Per-user Pronunciation Lab recording evaluations."
+    },
+    "/users/{userId}/lessonProgress/{progressId}": {
+      "schema": { "$ref": "#/entities/LessonProgress" },
+      "description": "Per-user curriculum completion tracking."
+    },
+    "/users/{userId}/savedStories/{storyId}": {
+      "schema": { "$ref": "#/entities/SavedStory" },
+      "description": "Per-user permanently saved AI-generated interactive stories."
+    },
+    "/cmsContent/{contentId}": {
+      "schema": { "$ref": "#/entities/CmsContentItem" },
+      "description": "Admin CMS published curriculum records readable by authenticated learners."
+    },
+    "/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Optional opt-in public leaderboard ranking collection."
+    }
+  }
+}

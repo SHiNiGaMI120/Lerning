@@ -1,0 +1,6 @@
+{
+  "name": "LingoWorld AI",
+  "description": "منصة متكاملة لتعليم الإنجليزية والإسبانية للناطقين بالعربية من الصفر A1 حتى الإتقان C2 بالجمل والقصص التفاعلية والفيديوهات والمدرس الذكي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

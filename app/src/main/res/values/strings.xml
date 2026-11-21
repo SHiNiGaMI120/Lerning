@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">LingoWorld AI</string>
+    <string name="welcome_title">مرحبًا بك في LingoWorld AI</string>
+    <string name="welcome_subtitle">تعلّم الإنجليزية والإسبانية من الصفر A1 حتى الاحتراف C2 بالجمل الحقيقية والقصص والمدرس الذكي</string>
+    <string name="sign_in_google">المتابعة بحساب Google</string>
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_learning">تعلمي</string>
+    <string name="nav_progress">التقدم</string>
+    <string name="nav_tutor">المدرس الذكي</string>
+    <string name="nav_practice">التدريب</string>
+    <string name="nav_more">المزيد</string>
+    <string name="nav_back_cd">العودة</string>
+    <string name="nav_stories_cd">القصص التفاعلية</string>
+    <string name="nav_settings_cd">الإعدادات</string>
+    <string name="nav_syncing_profile">جاري مزامنة ملفك السحابي في LingoWorld AI...</string>
+    <string name="home_greeting_morning">صباح الخير، %1$s</string>
+    <string name="home_greeting_afternoon">طاب يومك، %1$s</string>
+    <string name="home_greeting_evening">مساء الخير، %1$s</string>
+    <string name="home_continue_badge">آخر درس نشط</string>
+    <string name="home_continue_cta">متابعة الدرس الآن</string>
+    <string name="home_tutor_quick_cta">المدرس الذكي</string>
+    <string name="home_languages_title">نظرة سريعة على تقدمك في اللغات</string>
+    <string name="home_languages_subtitle">تعلّم الإنجليزية والإسبانية بالتوازي مع حفظ تقدم كل لغة</string>
+    <string name="home_active_track_badge">المسار النشط</string>
+    <string name="error_generic">حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.</string>
+</resources>
