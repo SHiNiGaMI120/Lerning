@@ -3,9 +3,10 @@ package com.example.ui.screens
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
-import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,18 +27,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -52,11 +55,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -330,6 +336,10 @@ private fun StoryReaderView(
     var showTranslations by remember { mutableStateOf(true) }
     var shadowingSlow by remember { mutableStateOf(false) }
 
+    DisposableEffect(story.id) {
+        onDispose { speechEngine.stopSpeaking() }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -384,7 +394,7 @@ private fun StoryReaderView(
                                     )
                                 }
                             ) {
-                                Icon(Icons.Filled.VolumeUp, contentDescription = "تشغيل صوت الشخصية", tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "تشغيل صوت الشخصية", tint = MaterialTheme.colorScheme.primary)
                             }
                             IconButton(
                                 onClick = {
@@ -518,8 +528,65 @@ fun RealVideosScreen(
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var activeLineIndex by remember(selectedVideo.id) { mutableStateOf(0) }
     var quizChoice by remember(selectedVideo.id) { mutableStateOf<Int?>(null) }
-    var reloadNonce by remember(selectedVideo.id) { mutableStateOf(0) }
+    var showEmbeddedPlayer by remember(selectedVideo.id) { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+    fun stopWebViewVideo() {
+        webViewRef?.let { wv ->
+            runCatching {
+                wv.onPause()
+                wv.loadUrl("about:blank")
+                wv.destroy()
+            }
+        }
+        webViewRef = null
+        showEmbeddedPlayer = false
+    }
+
+    fun speakSingleLineCleanly(index: Int) {
+        val line = selectedVideo.lines.getOrNull(index) ?: return
+        loopSingleLine = false
+        activeLineIndex = index
+        // Strict single-audio-source rule: NEVER allow YouTube audio and TTS to play together
+        if (showEmbeddedPlayer || webViewRef != null) {
+            stopWebViewVideo()
+        }
+        speechEngine.stopSpeaking()
+        speechEngine.speak(
+            text = line.text,
+            dialectCode = selectedVideo.dialect.code,
+            slow = playbackSpeed < 1f
+        )
+    }
+
+    // Stop all audio cleanly whenever the user switches video or leaves this screen
+    DisposableEffect(selectedVideo.id) {
+        onDispose {
+            speechEngine.stopSpeaking()
+            stopWebViewVideo()
+        }
+    }
+
+    // Optional clean TTS loop for the active sentence (never overlaps with YouTube)
+    LaunchedEffect(loopSingleLine, activeLineIndex, selectedVideo.id, playbackSpeed, showEmbeddedPlayer) {
+        if (!loopSingleLine || showEmbeddedPlayer) return@LaunchedEffect
+        val line = selectedVideo.lines.getOrNull(activeLineIndex) ?: return@LaunchedEffect
+        while (loopSingleLine && !showEmbeddedPlayer) {
+            speechEngine.speak(line.text, selectedVideo.dialect.code, slow = playbackSpeed < 1f)
+            val waitMs = ((line.text.length * 75L) + 2200L).coerceIn(3200L, 8000L)
+            delay(waitMs)
+        }
+    }
+
+    fun openInNativeYouTube(videoId: String) {
+        speechEngine.stopSpeaking()
+        loopSingleLine = false
+        stopWebViewVideo()
+        val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId"))
+        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+        runCatching { context.startActivity(appIntent) }
+            .onFailure { runCatching { context.startActivity(webIntent) } }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -529,7 +596,7 @@ fun RealVideosScreen(
         item {
             SectionHeader(
                 title = "التعلم من فيديوهات حقيقية",
-                subtitle = "اضغط زر التشغيل في الفيديو، أو اضغط على أي جملة للقفز إلى توقيتها وسماعها فورًا",
+                subtitle = "شاهد الفيديو أو استمع للجمل المترجمة واحدة تلو الأخرى بدون تداخل صوتي",
                 badge = selectedVideo.cefrLevel.code
             )
             Spacer(Modifier.height(8.dp))
@@ -537,106 +604,195 @@ fun RealVideosScreen(
                 items(videos, key = { it.id }) { vid ->
                     FilterChip(
                         selected = selectedVideo.id == vid.id,
-                        onClick = { selectedVideo = vid },
+                        onClick = {
+                            speechEngine.stopSpeaking()
+                            loopSingleLine = false
+                            stopWebViewVideo()
+                            selectedVideo = vid
+                        },
                         label = { Text("${vid.dialect.arabicLabel} (${vid.cefrLevel.code})") }
                     )
                 }
             }
         }
 
-        // Real Embedded YouTube IFrame Player API WebView (direct iframe for instant thumbnail & playback)
-        item(key = "yt_${selectedVideo.youtubeVideoId}_$reloadNonce") {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Black),
+        // Video Stage: Clean Poster Card OR Direct Mobile YouTube WebView (never black iframe)
+        item(key = "video_stage_${selectedVideo.youtubeVideoId}_$showEmbeddedPlayer") {
+            ElevatedCard(
+                shape = RoundedCornerShape(22.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                AndroidView(
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            setBackgroundColor(android.graphics.Color.BLACK)
-                            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.mediaPlaybackRequiresUserGesture = false
-                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            settings.loadWithOverviewMode = true
-                            settings.useWideViewPort = true
-                            settings.javaScriptCanOpenWindowsAutomatically = true
-                            settings.cacheMode = WebSettings.LOAD_DEFAULT
-                            CookieManager.getInstance().setAcceptCookie(true)
-                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                            webChromeClient = WebChromeClient()
-                            webViewClient = WebViewClient()
-                            loadDataWithBaseURL(
-                                "https://www.lingoworld.app",
-                                buildYouTubeIframeHtml(selectedVideo.youtubeVideoId),
-                                "text/html",
-                                "utf-8",
-                                null
-                            )
-                            webViewRef = this
+                if (showEmbeddedPlayer) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        AndroidView(
+                            factory = { ctx ->
+                                WebView(ctx).apply {
+                                    layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    setBackgroundColor(android.graphics.Color.BLACK)
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.mediaPlaybackRequiresUserGesture = false
+                                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                    settings.loadWithOverviewMode = true
+                                    settings.useWideViewPort = true
+                                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                                    CookieManager.getInstance().setAcceptCookie(true)
+                                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                                    webChromeClient = WebChromeClient()
+                                    webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(
+                                            view: WebView?,
+                                            request: WebResourceRequest?
+                                        ): Boolean {
+                                            val host = request?.url?.host.orEmpty()
+                                            return !(host.contains("youtube.com") || host.contains("youtu.be") || host.contains("google.com"))
+                                        }
+                                    }
+                                    loadUrl("https://m.youtube.com/watch?v=${selectedVideo.youtubeVideoId}")
+                                    webViewRef = this
+                                }
+                            },
+                            update = { view -> webViewRef = view },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { stopWebViewVideo() },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f).testTag("video_close_embed_btn")
+                            ) {
+                                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.size(4.dp))
+                                Text("إغلاق المشغّل")
+                            }
+                            Button(
+                                onClick = { openInNativeYouTube(selectedVideo.youtubeVideoId) },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f).testTag("video_open_youtube_btn")
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.size(4.dp))
+                                Text("فتح في يوتيوب")
+                            }
                         }
-                    },
-                    update = { view ->
-                        webViewRef = view
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(225.dp)
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(selectedVideo.titleAr, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { reloadNonce++ },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).testTag("video_reload_btn")
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.size(6.dp))
-                    Text("تحديث المشغّل")
-                }
-                OutlinedButton(
-                    onClick = {
-                        runCatching {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://www.youtube.com/watch?v=${selectedVideo.youtubeVideoId}")
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(190.dp)
+                                .clickable { openInNativeYouTube(selectedVideo.youtubeVideoId) }
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.img_stories_banner_1795256214202),
+                                contentDescription = selectedVideo.titleAr,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
                             )
-                            context.startActivity(intent)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color(0x55000000), Color(0xCC0F172A))
+                                        )
+                                    )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = "تشغيل الفيديو",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(38.dp)
+                                )
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = selectedVideo.titleAr,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "${selectedVideo.dialect.arabicLabel} • ${selectedVideo.cefrLevel.code} • ${selectedVideo.lines.size} جمل تفاعلية مشروحة",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.9f)
+                                )
+                            }
                         }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).testTag("video_open_youtube_btn")
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.size(6.dp))
-                    Text("فتح في YouTube")
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { openInNativeYouTube(selectedVideo.youtubeVideoId) },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("video_open_youtube_btn")
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.size(6.dp))
+                                Text("مشاهدة الفيديو في تطبيق YouTube (بأعلى جودة)", fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    speechEngine.stopSpeaking()
+                                    loopSingleLine = false
+                                    showEmbeddedPlayer = true
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("video_embed_toggle_btn")
+                            ) {
+                                Icon(Icons.Filled.OndemandVideo, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.size(6.dp))
+                                Text("أو تشغيل صفحة يوتيوب داخل التطبيق")
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // Speed Controls, Single-Line Loop & Hide Transcript Toggle
+        // Clean Single-Voice Audio Controls (Speed, Loop, Stop Audio, Hide Transcript)
         item {
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                items(listOf(0.75f, 1.0f, 1.25f)) { rate ->
+                items(listOf(0.75f, 1.0f)) { rate ->
                     FilterChip(
                         selected = playbackSpeed == rate,
-                        onClick = {
-                            playbackSpeed = rate
-                            webViewRef?.evaluateJavascript("setRate($rate);", null)
-                        },
-                        label = { Text("${rate}x") }
+                        onClick = { playbackSpeed = rate },
+                        label = { Text(if (rate < 1f) "نطق بطيء" else "سرعة طبيعية") }
                     )
                 }
                 item {
@@ -644,20 +800,32 @@ fun RealVideosScreen(
                         selected = loopSingleLine,
                         onClick = {
                             loopSingleLine = !loopSingleLine
-                            if (!loopSingleLine) {
-                                webViewRef?.evaluateJavascript("stopLoop();", null)
+                            if (loopSingleLine) {
+                                stopWebViewVideo()
                             } else {
-                                val line = selectedVideo.lines.getOrNull(activeLineIndex)
-                                if (line != null) {
-                                    webViewRef?.evaluateJavascript("seekAndLoop(${line.startSeconds}, ${line.endSeconds});", null)
-                                }
+                                speechEngine.stopSpeaking()
                             }
                         },
                         leadingIcon = {
                             Icon(Icons.Filled.Loop, contentDescription = null, modifier = Modifier.size(16.dp))
                         },
-                        label = { Text(if (loopSingleLine) "التكرار مفعّل" else "تكرار الجملة") },
+                        label = { Text(if (loopSingleLine) "إيقاف التكرار" else "تكرار الجملة") },
                         modifier = Modifier.testTag("video_loop_toggle_chip")
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            loopSingleLine = false
+                            speechEngine.stopSpeaking()
+                            stopWebViewVideo()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                        },
+                        label = { Text("إيقاف الصوت") },
+                        modifier = Modifier.testTag("video_stop_audio_chip")
                     )
                 }
                 item {
@@ -677,7 +845,7 @@ fun RealVideosScreen(
             }
         }
 
-        // Timestamped Subtitle Lines
+        // Timestamped Subtitle Lines (Clean Single-Voice Practice)
         items(selectedVideo.lines.indices.toList()) { idx ->
             val line = selectedVideo.lines[idx]
             val isActive = idx == activeLineIndex
@@ -689,15 +857,7 @@ fun RealVideosScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        activeLineIndex = idx
-                        val jsCall = if (loopSingleLine) {
-                            "seekAndLoop(${line.startSeconds}, ${line.endSeconds});"
-                        } else {
-                            "seekAndPlay(${line.startSeconds}, ${line.endSeconds});"
-                        }
-                        webViewRef?.evaluateJavascript(jsCall, null)
-                    }
+                    .clickable { speakSingleLineCleanly(idx) }
                     .testTag("video_line_$idx")
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -706,27 +866,22 @@ fun RealVideosScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatusPill("${line.startSeconds}s → ${line.endSeconds}s")
+                        StatusPill("الجملة ${idx + 1} • ${line.startSeconds}ث - ${line.endSeconds}ث")
                         Row {
                             IconButton(
-                                onClick = {
-                                    activeLineIndex = idx
-                                    val jsCall = if (loopSingleLine) {
-                                        "seekAndLoop(${line.startSeconds}, ${line.endSeconds});"
-                                    } else {
-                                        "seekAndPlay(${line.startSeconds}, ${line.endSeconds});"
-                                    }
-                                    webViewRef?.evaluateJavascript(jsCall, null)
-                                    speechEngine.speak(line.text, selectedVideo.dialect.code, slow = playbackSpeed < 1f)
-                                }
+                                onClick = { speakSingleLineCleanly(idx) }
                             ) {
-                                Icon(Icons.Filled.PlayArrow, contentDescription = "تشغيل الجملة في الفيديو", tint = MaterialTheme.colorScheme.primary)
+                                Icon(
+                                    Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "سماع نطق الجملة",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                             IconButton(
                                 onClick = {
                                     activeLineIndex = idx
+                                    stopWebViewVideo()
                                     loopSingleLine = true
-                                    webViewRef?.evaluateJavascript("seekAndLoop(${line.startSeconds}, ${line.endSeconds});", null)
                                 }
                             ) {
                                 Icon(
@@ -754,7 +909,7 @@ fun RealVideosScreen(
                         )
                     } else {
                         Text(
-                            text = "وضع الاستماع المركز: اضغط للتشغيل واختبر فهمك دون قراءة النص.",
+                            text = "وضع الاستماع المركز: اضغط لسماع الجملة واختبر فهمك دون قراءة النص.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -792,7 +947,12 @@ fun RealVideosScreen(
                         }
                     }
                     Button(
-                        onClick = { onCompleteVideo(selectedVideo) },
+                        onClick = {
+                            speechEngine.stopSpeaking()
+                            loopSingleLine = false
+                            stopWebViewVideo()
+                            onCompleteVideo(selectedVideo)
+                        },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -803,72 +963,6 @@ fun RealVideosScreen(
         }
     }
 }
-
-private fun buildYouTubeIframeHtml(videoId: String): String = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-  html, body { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
-  iframe { width: 100%; height: 100%; border: 0; display: block; }
-</style>
-</head>
-<body>
-<iframe
-  id="ytplayer"
-  type="text/html"
-  src="https://www.youtube-nocookie.com/embed/$videoId?enablejsapi=1&playsinline=1&rel=0&modestbranding=1&origin=https://www.lingoworld.app"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  allowfullscreen>
-</iframe>
-<script src="https://www.youtube.com/iframe_api"></script>
-<script>
-  var player = null;
-  var stopTimer = null;
-  function onYouTubeIframeAPIReady() {
-    player = new YT.Player('ytplayer', {
-      events: {
-        'onReady': function() {}
-      }
-    });
-  }
-  function seekAndPlay(startSec, endSec) {
-    if (!player || !player.seekTo) return;
-    stopLoop();
-    player.seekTo(startSec, true);
-    player.playVideo();
-    var durationMs = Math.max(2500, (endSec - startSec) * 1000);
-    stopTimer = setTimeout(function() {
-      if (player && player.pauseVideo) player.pauseVideo();
-    }, durationMs);
-  }
-  function seekAndLoop(startSec, endSec) {
-    if (!player || !player.seekTo) return;
-    stopLoop();
-    var durationMs = Math.max(2500, (endSec - startSec) * 1000);
-    function playCycle() {
-      if (!player || !player.seekTo) return;
-      player.seekTo(startSec, true);
-      player.playVideo();
-      stopTimer = setTimeout(playCycle, durationMs);
-    }
-    playCycle();
-  }
-  function stopLoop() {
-    if (stopTimer) {
-      clearTimeout(stopTimer);
-      stopTimer = null;
-    }
-  }
-  function setRate(rate) {
-    if (player && player.setPlaybackRate) player.setPlaybackRate(rate);
-  }
-</script>
-</body>
-</html>
-""".trimIndent()
 
 private fun cmsToVideoLesson(cms: CmsContentItem): VideoLesson {
     val lang = TargetLanguage.fromCode(cms.language)

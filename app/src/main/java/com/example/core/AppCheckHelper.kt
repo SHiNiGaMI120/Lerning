@@ -74,9 +74,19 @@ private fun installRecaptchaProvider(context: Context): Boolean {
         Log.e(TAG, "recaptcha_site_key resource string is blank.")
         return false
     }
-    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+    val appCheck = FirebaseAppCheck.getInstance()
+    appCheck.installAppCheckProviderFactory(
         RecaptchaAppCheckProviderFactory.getInstance(siteKey)
     )
+    // Pre-warm the reCAPTCHA client and cache an App Check token asynchronously
+    // so the user's first AI Tutor call doesn't stall on cold initialization.
+    appCheck.getAppCheckToken(false)
+        .addOnSuccessListener {
+            Log.d(TAG, "RecaptchaAppCheckProviderFactory pre-warmed token successfully.")
+        }
+        .addOnFailureListener { error ->
+            Log.w(TAG, "Recaptcha App Check pre-warm failed: ${error.localizedMessage}")
+        }
     Log.d(TAG, "RecaptchaAppCheckProviderFactory installed.")
     return true
 }

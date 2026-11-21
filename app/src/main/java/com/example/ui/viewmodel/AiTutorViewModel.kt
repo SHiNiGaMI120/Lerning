@@ -110,7 +110,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Unit lesson generation failed", e)
-                _generatedUnitLessonState.value = AiOpState.Error(e.localizedMessage ?: "تعذر توليد درس جديد بالذكاء الاصطناعي.")
+                _generatedUnitLessonState.value = AiOpState.Error(formatAiError(e, "تعذر توليد درس جديد بالذكاء الاصطناعي."))
             }
         }
     }
@@ -145,7 +145,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Session scorecard failed", e)
-                _sessionScorecardState.value = AiOpState.Error(e.localizedMessage ?: "تعذر تحليل تقرير الجلسة.")
+                _sessionScorecardState.value = AiOpState.Error(formatAiError(e, "تعذر تحليل تقرير الجلسة."))
             }
         }
     }
@@ -182,7 +182,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Unseen exam generation failed", e)
-                _examGeneratorState.value = AiOpState.Error(e.localizedMessage ?: "تعذر توليد أسئلة جديدة للاختبار.")
+                _examGeneratorState.value = AiOpState.Error(formatAiError(e, "تعذر توليد أسئلة جديدة للاختبار."))
             }
         }
     }
@@ -229,7 +229,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Exam AI evaluation failed", e)
-                _examGradingState.value = AiOpState.Error(e.localizedMessage ?: "تعذر تقييم الاختبار.")
+                _examGradingState.value = AiOpState.Error(formatAiError(e, "تعذر تقييم الاختبار."))
             }
         }
     }
@@ -292,7 +292,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Tutor stream failed", e)
-                _tutorStreamState.value = AiOpState.Error(e.localizedMessage ?: "تعذر الاتصال بالمدرس الذكي.")
+                _tutorStreamState.value = AiOpState.Error(formatAiError(e, "تعذر الاتصال بالمدرس الذكي."))
             }
         }
     }
@@ -337,7 +337,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Pronunciation analysis failed", e)
-                _pronunciationState.value = AiOpState.Error(e.localizedMessage ?: "تعذر تحليل النطق.")
+                _pronunciationState.value = AiOpState.Error(formatAiError(e, "تعذر تحليل النطق."))
             }
         }
     }
@@ -360,7 +360,7 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Story generation failed", e)
-                _generatedStoryState.value = AiOpState.Error(e.localizedMessage ?: "تعذر توليد القصة بالذكاء الاصطناعي.")
+                _generatedStoryState.value = AiOpState.Error(formatAiError(e, "تعذر توليد القصة بالذكاء الاصطناعي."))
             }
         }
     }
@@ -388,12 +388,28 @@ class AiTutorViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Writing grade failed", e)
-                _writingGradeState.value = AiOpState.Error(e.localizedMessage ?: "تعذر تقييم الكتابة.")
+                _writingGradeState.value = AiOpState.Error(formatAiError(e, "تعذر تقييم الكتابة."))
             }
         }
     }
 
     fun resetWritingGrade() {
         _writingGradeState.value = AiOpState.Idle
+    }
+
+    private fun formatAiError(error: Throwable, fallbackAr: String): String {
+        val raw = error.localizedMessage.orEmpty()
+        return when {
+            raw.contains("allotted time", ignoreCase = true) ||
+                raw.contains("timeout", ignoreCase = true) ->
+                "الاتصال بالخادم أبطأ من المعتاد على الشبكة الحالية. اضغط إرسال مجددًا أو جرب الواي فاي."
+            raw.contains("App Check", ignoreCase = true) || raw.contains("403") ->
+                "تعذر التحقق الأمني من الاتصال ($raw). تأكد من ضبط الوقت تلقائياً وحاول مجددًا."
+            raw.contains("Unable to resolve host", ignoreCase = true) ||
+                raw.contains("network", ignoreCase = true) ->
+                "تأكد من اتصال الإنترنت على هاتفك ثم حاول مجددًا."
+            raw.isNotBlank() -> "$fallbackAr ($raw)"
+            else -> fallbackAr
+        }
     }
 }

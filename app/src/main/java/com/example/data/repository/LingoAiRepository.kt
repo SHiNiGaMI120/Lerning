@@ -30,30 +30,30 @@ import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
 private const val TAG = "LingoAiRepository"
+private const val DEFAULT_MODEL = "gemini-3.8-flash"
 
 class LingoAiRepository {
 
-    // Fast multi-turn conversational model (general tasks)
+    // Fast multi-turn conversational model (official default gemini-3.8-flash, no billing required)
     private fun createTutorModel(systemPrompt: String, deepThinking: Boolean) =
         if (deepThinking) {
-            // High Thinking mode using gemini-4-carbon with ThinkingLevel.HIGH and NO maxOutputTokens
             Firebase.ai.generativeModel(
-                modelName = "gemini-4-carbon",
+                modelName = DEFAULT_MODEL,
                 generationConfig = generationConfig {
                     thinkingConfig = thinkingConfig {
-                        thinkingLevel = ThinkingLevel.HIGH
+                        thinkingLevel = ThinkingLevel.MEDIUM
                     }
                 },
                 systemInstruction = content { text(systemPrompt) }
             )
         } else {
             Firebase.ai.generativeModel(
-                modelName = "gemini-4-hydrogen",
+                modelName = DEFAULT_MODEL,
                 systemInstruction = content { text(systemPrompt) }
             )
         }
 
-    // Structured JSON deep-thinking model for Pronunciation Lab Coaching
+    // Structured JSON model for Pronunciation Lab Coaching
     private val pronunciationModel by lazy {
         val schema = Schema.obj(
             properties = mapOf(
@@ -68,13 +68,10 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-carbon",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = schema
-                thinkingConfig = thinkingConfig {
-                    thinkingLevel = ThinkingLevel.HIGH
-                }
             }
         )
     }
@@ -110,7 +107,7 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-hydrogen",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = storySchema
@@ -118,7 +115,7 @@ class LingoAiRepository {
         )
     }
 
-    // Deep-thinking Writing & Exam Grader
+    // Writing & Exam Grader
     private val writingGraderModel by lazy {
         val schema = Schema.obj(
             properties = mapOf(
@@ -127,13 +124,10 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-carbon",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = schema
-                thinkingConfig = thinkingConfig {
-                    thinkingLevel = ThinkingLevel.HIGH
-                }
             }
         )
     }
@@ -159,7 +153,7 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-hydrogen",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = examSchema
@@ -167,7 +161,7 @@ class LingoAiRepository {
         )
     }
 
-    // Deep-thinking Official CEFR Exam Grader (Speaking + Writing + Placement recommendation)
+    // Official CEFR Exam Grader (Speaking + Writing + Placement recommendation)
     private val examGraderModel by lazy {
         val schema = Schema.obj(
             properties = mapOf(
@@ -178,13 +172,10 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-carbon",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = schema
-                thinkingConfig = thinkingConfig {
-                    thinkingLevel = ThinkingLevel.HIGH
-                }
             }
         )
     }
@@ -217,7 +208,7 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-hydrogen",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = wrapperSchema
@@ -225,7 +216,7 @@ class LingoAiRepository {
         )
     }
 
-    // Deep-thinking AI Tutor end-of-session scorecard & recurring mistakes tracker
+    // AI Tutor end-of-session scorecard & recurring mistakes tracker
     private val tutorScorecardModel by lazy {
         val schema = Schema.obj(
             properties = mapOf(
@@ -240,13 +231,10 @@ class LingoAiRepository {
             )
         )
         Firebase.ai.generativeModel(
-            modelName = "gemini-4-carbon",
+            modelName = DEFAULT_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = schema
-                thinkingConfig = thinkingConfig {
-                    thinkingLevel = ThinkingLevel.HIGH
-                }
             }
         )
     }
@@ -278,23 +266,59 @@ class LingoAiRepository {
         }
 
         val model = createTutorModel(systemPrompt, deepThinking)
-        val chatHistory = history.takeLast(16).map { msg ->
-            content(role = if (msg.sender == "user") "user" else "model") {
-                text(msg.text)
+
+        // Strictly alternate user/model turns so previous unanswered user messages don't break chat history
+        val sanitizedHistory = mutableListOf<com.google.firebase.ai.type.Content>()
+        var expectedRole = "user"
+        history.takeLast(12).forEach { msg ->
+            val role = if (msg.sender == "user") "user" else "model"
+            if (role == expectedRole && msg.text.isNotBlank()) {
+                sanitizedHistory += content(role = role) { text(msg.text) }
+                expectedRole = if (expectedRole == "user") "model" else "user"
             }
         }
-        val chat = model.startChat(history = chatHistory)
+        if (sanitizedHistory.lastOrNull()?.role == "user") {
+            sanitizedHistory.removeAt(sanitizedHistory.lastIndex)
+        }
 
         val accumulated = StringBuilder()
-        withTimeout(60_000L) {
-            chat.sendMessageStream(userInput).collect { chunk ->
-                val part = chunk.text.orEmpty()
-                if (part.isNotEmpty()) {
-                    accumulated.append(part)
-                    emit(accumulated.toString())
+        try {
+            val chat = model.startChat(history = sanitizedHistory)
+            withTimeout(45_000L) {
+                chat.sendMessageStream(userInput).collect { chunk ->
+                    val part = chunk.text.orEmpty()
+                    if (part.isNotEmpty()) {
+                        accumulated.append(part)
+                        emit(accumulated.toString())
+                    }
                 }
             }
+        } catch (e: CancellationException) {
+            if (e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+            Log.w(TAG, "Tutor streaming timed out; falling back to unary sendMessage", e)
+        } catch (e: Exception) {
+            val msg = e.localizedMessage.orEmpty()
+            val isTimeout = msg.contains("allotted time", ignoreCase = true) ||
+                msg.contains("timeout", ignoreCase = true)
+            if (!isTimeout || accumulated.isNotBlank()) {
+                throw e
+            }
+            Log.w(TAG, "Tutor streaming hit SDK timeout; retrying via unary sendMessage", e)
         }
+
+        if (accumulated.isBlank()) {
+            // Resilient unary fallback (more reliable across mobile 4G proxies than SSE streaming)
+            val fallbackChat = model.startChat(history = sanitizedHistory)
+            val reply = withTimeout(55_000L) {
+                fallbackChat.sendMessage(userInput)
+            }
+            val text = reply.text.orEmpty().trim()
+            if (text.isNotBlank()) {
+                accumulated.append(text)
+                emit(text)
+            }
+        }
+
         if (accumulated.isBlank()) {
             throw IllegalStateException("لم يُرجع المدرس الذكي ردًا، يرجى المحاولة مرة أخرى.")
         }
