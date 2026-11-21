@@ -31,9 +31,11 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SlowMotionVideo
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,6 +53,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -135,6 +138,10 @@ fun AiTutorScreen(
 
     LaunchedEffect(selectedScenario.id, activeLang.code) {
         aiViewModel.clearSessionScorecard()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { speechEngine.stopSpeaking() }
     }
 
     if (showNewSessionConfirm) {
@@ -288,9 +295,11 @@ fun AiTutorScreen(
                     message = TutorMessage(
                         sender = "tutor",
                         text = starter,
-                        arabicExplanation = "موقف: ${selectedScenario.subtitleAr} — أجب باللغة المستهدفة صوتيًا أو كتابيًا وسأصحح لك فورًا بالعربية!"
+                        arabicExplanation = "موقف: ${selectedScenario.subtitleAr} — اختر رداً مقترحاً بالأسفل أو اكتب/تحدث بصوتك وسأصحح لك فوراً!"
                     ),
-                    onSpeak = { speechEngine.speak(starter, activeDialect.code, slow = false) }
+                    onSpeak = { speechEngine.speak(starter, activeDialect.code, slow = false) },
+                    onSpeakSlow = { speechEngine.speak(starter, activeDialect.code, slow = true) },
+                    onSave = { onSaveSentence(starter, selectedScenario.subtitleAr, "بداية حوار: ${selectedScenario.titleAr}") }
                 )
             }
 
@@ -306,25 +315,52 @@ fun AiTutorScreen(
                 } else {
                     TutorBubble(
                         message = msg,
-                        onSpeak = { speechEngine.speak(msg.text, activeDialect.code, slow = false) }
+                        onSpeak = { speechEngine.speak(msg.text, activeDialect.code, slow = false) },
+                        onSpeakSlow = { speechEngine.speak(msg.text, activeDialect.code, slow = true) },
+                        onSave = {
+                            onSaveSentence(
+                                msg.text,
+                                msg.arabicExplanation.ifBlank { selectedScenario.titleAr },
+                                "من محادثة المدرس الذكي"
+                            )
+                        }
                     )
                 }
             }
 
-            // Streaming / Loading / Error Live Feedback
+            // Streaming / Loading / Error Live Feedback with 1-Tap Cancel
             item(key = "stream_status") {
                 when (val s = streamState) {
                     is AiOpState.Loading -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(8.dp)
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Text(
-                                text = if (deepThinkingEnabled) "جاري التفكير العميق وتحليل لغتك..." else "المدرس الذكي يكتب الرد...",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    Text(
+                                        text = if (deepThinkingEnabled) "جاري التحليل العميق لرسالتك..." else "المدرس الذكي يجهّز الرد...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { aiViewModel.cancelTutorRequest() },
+                                    modifier = Modifier.testTag("tutor_cancel_btn")
+                                ) {
+                                    Text("إلغاء", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                     is AiOpState.Streaming -> {
@@ -334,7 +370,9 @@ fun AiTutorScreen(
                                 text = s.partialText,
                                 deepThinking = deepThinkingEnabled
                             ),
-                            onSpeak = {}
+                            onSpeak = {},
+                            onSpeakSlow = {},
+                            onSave = {}
                         )
                     }
                     is AiOpState.Error -> ErrorBannerCard(s.message)
@@ -393,6 +431,27 @@ fun AiTutorScreen(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
+        }
+
+        // Quick Reply Suggestions Bar (helps beginners start speaking effortlessly)
+        val quickReplies = remember(selectedScenario.id, activeLang) {
+            tutorQuickRepliesFor(selectedScenario.id, activeLang)
+        }
+        val sendingNow = streamState is AiOpState.Loading || streamState is AiOpState.Streaming
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(quickReplies) { suggestion ->
+                AssistChip(
+                    onClick = {
+                        if (!sendingNow) {
+                            draftInput = suggestion
+                        }
+                    },
+                    label = { Text(suggestion, maxLines = 1, style = MaterialTheme.typography.labelMedium) }
+                )
+            }
         }
 
         // Composer Row (Voice + Text + Send)
@@ -512,7 +571,9 @@ private fun UserBubble(message: TutorMessage) {
 @Composable
 private fun TutorBubble(
     message: TutorMessage,
-    onSpeak: () -> Unit
+    onSpeak: () -> Unit,
+    onSpeakSlow: () -> Unit,
+    onSave: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Card(
@@ -532,12 +593,28 @@ private fun TutorBubble(
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                     )
-                    IconButton(onClick = onSpeak, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            Icons.Filled.VolumeUp,
-                            contentDescription = "الاستماع لرد المدرس",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        IconButton(onClick = onSpeak, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "الاستماع لرد المدرس",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = onSpeakSlow, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Filled.SlowMotionVideo,
+                                contentDescription = "الاستماع بنطق بطيء",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Filled.BookmarkAdd,
+                                contentDescription = "حفظ الجملة للمراجعة",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
                 LtrTargetText(message.text)
@@ -556,6 +633,24 @@ private fun TutorBubble(
                     }
                 }
             }
+        }
+    }
+}
+
+private fun tutorQuickRepliesFor(scenarioId: String, lang: TargetLanguage): List<String> {
+    return if (lang == TargetLanguage.ES) {
+        when (scenarioId) {
+            "airport" -> listOf("Aquí tienes mi pasaporte.", "¿Cuál es mi puerta de embarque?", "¿El vuelo sale a tiempo?")
+            "hotel" -> listOf("Tengo una reserva a mi nombre.", "¿A qué hora es el desayuno?", "¿Cuál es la clave del Wi-Fi?")
+            "restaurant" -> listOf("Quisiera ver el menú, por favor.", "Para mí, un café con leche.", "La cuenta, por favor.")
+            else -> listOf("¡Hola! Hoy tuve un buen día.", "¿Puedes hablar más despacio?", "¿Cómo se dice esto mejor?")
+        }
+    } else {
+        when (scenarioId) {
+            "airport" -> listOf("Here is my passport and ticket.", "Which gate is my flight?", "Is my flight on time?")
+            "hotel" -> listOf("I have a reservation under my name.", "What time is breakfast?", "Could I get a quiet room?")
+            "restaurant" -> listOf("Could I see the menu, please?", "I'd like a hot coffee to go.", "Could I get the check, please?")
+            else -> listOf("Hi! I'm doing great today.", "Could you speak a bit slower?", "How can I say that more naturally?")
         }
     }
 }
@@ -615,7 +710,7 @@ private fun SessionScorecardCard(
             ) {
                 Text("جملة تدريب تصحيحية مخصصة لك:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 IconButton(onClick = onSpeakPractice, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.VolumeUp, contentDescription = "الاستماع للجملة التصحيحية")
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "الاستماع للجملة التصحيحية")
                 }
             }
             LtrTargetText(scorecard.correctivePracticeSentence, bold = true)

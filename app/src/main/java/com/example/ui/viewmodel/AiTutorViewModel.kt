@@ -16,6 +16,7 @@ import com.example.data.repository.LingoAiRepository
 import com.example.data.repository.LingoRepository
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -79,6 +80,14 @@ class AiTutorViewModel(
 
     private val _sessionScorecardState = MutableStateFlow<AiOpState<TutorSessionScorecard>>(AiOpState.Idle)
     val sessionScorecardState: StateFlow<AiOpState<TutorSessionScorecard>> = _sessionScorecardState.asStateFlow()
+
+    private var tutorJob: Job? = null
+
+    fun cancelTutorRequest() {
+        tutorJob?.cancel()
+        tutorJob = null
+        _tutorStreamState.value = AiOpState.Idle
+    }
 
     fun generateUnitLesson(
         language: TargetLanguage,
@@ -246,15 +255,21 @@ class AiTutorViewModel(
         val trimmed = userInput.trim()
         if (trimmed.isEmpty()) return
 
-        viewModelScope.launch {
+        tutorJob?.cancel()
+        tutorJob = viewModelScope.launch {
             _tutorStreamState.value = AiOpState.Loading
-            repository.addTutorMessage(
-                scenarioId = scenario.id,
-                language = language.code,
-                sender = "user",
-                text = trimmed,
-                deepThinking = deepThinking
-            )
+            // Save user message concurrently so Firestore latency never delays the AI call
+            launch {
+                runCatching {
+                    repository.addTutorMessage(
+                        scenarioId = scenario.id,
+                        language = language.code,
+                        sender = "user",
+                        text = trimmed,
+                        deepThinking = deepThinking
+                    )
+                }
+            }
 
             try {
                 var fullReply = ""
@@ -287,7 +302,7 @@ class AiTutorViewModel(
                 _tutorStreamState.value = AiOpState.Idle
             } catch (e: TimeoutCancellationException) {
                 Log.e(TAG, "Tutor stream timed out", e)
-                _tutorStreamState.value = AiOpState.Error("استغرق الرد وقتًا أطول من 60 ثانية. حاول مجددًا.")
+                _tutorStreamState.value = AiOpState.Error("استغرق الرد وقتًا أطول من المعتاد. اضغط إرسال مجددًا أو جرب الواي فاي.")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -400,9 +415,13 @@ class AiTutorViewModel(
     private fun formatAiError(error: Throwable, fallbackAr: String): String {
         val raw = error.localizedMessage.orEmpty()
         return when {
+            raw.startsWith("APPCHECK_TIMEOUT") ->
+                "انتهت مهلة التحقق الأمني (reCAPTCHA) على الشبكة الحالية ($raw). تأكد من تحديث خدمات Google Play أو جرب شبكة أخرى."
+            raw.startsWith("APPCHECK_ERROR") ->
+                "تعذر إكمال التحقق الأمني من التطبيق ($raw). تأكد من اتصال الإنترنت وضبط الوقت تلقائياً."
             raw.contains("allotted time", ignoreCase = true) ||
                 raw.contains("timeout", ignoreCase = true) ->
-                "الاتصال بالخادم أبطأ من المعتاد على الشبكة الحالية. اضغط إرسال مجددًا أو جرب الواي فاي."
+                "الاتصال بخادم الذكاء الاصطناعي بطيء على الشبكة الحالية. اضغط إرسال مجددًا أو جرب الواي فاي."
             raw.contains("App Check", ignoreCase = true) || raw.contains("403") ->
                 "تعذر التحقق الأمني من الاتصال ($raw). تأكد من ضبط الوقت تلقائياً وحاول مجددًا."
             raw.contains("Unable to resolve host", ignoreCase = true) ||

@@ -52,7 +52,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -299,6 +303,7 @@ fun HomeDashboardScreen(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
+                            val rankLabel = remember(profile.xp) { resolveLearnerRank(profile.xp) }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -310,7 +315,7 @@ fun HomeDashboardScreen(
                                     color = Color.White
                                 )
                                 Text(
-                                    text = "${profile.xp} XP",
+                                    text = "$rankLabel • ${profile.xp} XP",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFFD166)
@@ -360,6 +365,15 @@ fun HomeDashboardScreen(
                     if (dueCardsCount > 0) onNavigate(LingoDestination.REVIEW)
                     else onNavigate(LingoDestination.TESTS)
                 }
+            )
+        }
+
+        // 3.5 Interactive 30-Second Daily Quick Challenge (instant mini-game on Home)
+        item {
+            DailyQuickChallengeCard(
+                language = activeLang,
+                level = profile.currentLevelEnum(),
+                onPlayFullLesson = { onContinueLastLesson(activeLesson) }
             )
         }
 
@@ -488,6 +502,206 @@ fun HomeDashboardScreen(
                 }
             }
             FeatureTileGrid(items = evaluationItems, onNavigate = onNavigate)
+        }
+    }
+}
+
+private fun resolveLearnerRank(xp: Long): String = when {
+    xp >= 1500L -> "أسطورة الطلاقة"
+    xp >= 700L -> "نجم اللغات"
+    xp >= 250L -> "متحدث صاعد"
+    else -> "مستكشف اللغات"
+}
+
+@Composable
+private fun DailyQuickChallengeCard(
+    language: TargetLanguage,
+    level: CefrLevel,
+    onPlayFullLesson: () -> Unit
+) {
+    val daySeed = remember { Calendar.getInstance().get(Calendar.DAY_OF_YEAR) }
+    var roundOffset by remember(language, level) { mutableIntStateOf(0) }
+    var pickedOption by remember(language, level, roundOffset) { mutableStateOf<Int?>(null) }
+    var correctStreak by remember(language, level) { mutableIntStateOf(0) }
+
+    val challengeItem = remember(language, level, daySeed, roundOffset) {
+        val unitNum = ((daySeed + roundOffset) % 12) + 1
+        val lessonNum = ((daySeed / 2 + roundOffset) % 10) + 1
+        val items = CurriculumCatalog.sentencesFor(language, level, unitNum, lessonNum)
+        items.getOrElse((daySeed + roundOffset) % items.size.coerceAtLeast(1)) { items.first() }
+    }
+
+    ElevatedCard(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("home_daily_quick_challenge")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Bolt,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "تحدّي الـ 30 ثانية السريع",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "سؤال خاطف في ${language.arabicName} (${level.code})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (correctStreak > 0) {
+                    StatusPill(
+                        text = "سلسلة $correctStreak ✓",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LtrTargetText(challengeItem.sentence, bold = true)
+                    Text(
+                        text = challengeItem.comprehensionQuestionAr,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                challengeItem.optionsAr.forEachIndexed { idx, opt ->
+                    val isPicked = pickedOption == idx
+                    val isCorrect = idx == challengeItem.correctOptionIndex
+                    val bgColor = when {
+                        pickedOption == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        isPicked && isCorrect -> MaterialTheme.colorScheme.primaryContainer
+                        isPicked -> MaterialTheme.colorScheme.errorContainer
+                        isCorrect -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = bgColor,
+                        border = if (isPicked) BorderStroke(
+                            1.5.dp,
+                            if (isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        ) else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(enabled = pickedOption == null) {
+                                pickedOption = idx
+                                if (idx == challengeItem.correctOptionIndex) {
+                                    correctStreak += 1
+                                } else {
+                                    correctStreak = 0
+                                }
+                            }
+                            .testTag("home_challenge_opt_$idx")
+                    ) {
+                        Text(
+                            text = opt,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isPicked || (pickedOption != null && isCorrect)) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                        )
+                    }
+                }
+            }
+
+            if (pickedOption != null) {
+                val won = pickedOption == challengeItem.correctOptionIndex
+                Surface(
+                    color = if (won) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                    else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = if (won) "ممتاز! إجابة دقيقة وسريعة!" else "المعنى الصحيح: ${challengeItem.arabicTranslation}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (won) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        if (challengeItem.expressionNoteAr.isNotBlank()) {
+                            Text(
+                                text = challengeItem.expressionNoteAr,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { roundOffset += 1 },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("home_challenge_next_btn")
+                    ) {
+                        Text("تحدّي آخر ↻")
+                    }
+                    Button(
+                        onClick = onPlayFullLesson,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                    ) {
+                        Text("العب الدرس الكامل")
+                    }
+                }
+            }
         }
     }
 }

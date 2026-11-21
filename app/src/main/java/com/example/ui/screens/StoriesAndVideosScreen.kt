@@ -10,6 +10,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,11 +24,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PlayArrow
@@ -47,22 +53,27 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -335,9 +346,43 @@ private fun StoryReaderView(
     var selectedQuizOption by remember(story.id) { mutableStateOf<Int?>(null) }
     var showTranslations by remember { mutableStateOf(true) }
     var shadowingSlow by remember { mutableStateOf(false) }
+    var autoPlayingStory by remember(story.id) { mutableStateOf(false) }
+    var speakingTurnIndex by remember(story.id) { mutableIntStateOf(-1) }
+
+    BackHandler {
+        autoPlayingStory = false
+        speechEngine.stopSpeaking()
+        onBack()
+    }
 
     DisposableEffect(story.id) {
-        onDispose { speechEngine.stopSpeaking() }
+        onDispose {
+            autoPlayingStory = false
+            speechEngine.stopSpeaking()
+        }
+    }
+
+    LaunchedEffect(autoPlayingStory, story.id, shadowingSlow) {
+        if (!autoPlayingStory) {
+            speakingTurnIndex = -1
+            return@LaunchedEffect
+        }
+        for (idx in story.turns.indices) {
+            if (!autoPlayingStory) break
+            val turn = story.turns[idx]
+            speakingTurnIndex = idx
+            speechEngine.speak(
+                text = turn.text,
+                dialectCode = dialect.code,
+                slow = shadowingSlow,
+                pitch = turn.voicePitch
+            )
+            val charMs = if (shadowingSlow) 92L else 68L
+            val waitMs = ((turn.text.length * charMs) + 1600L).coerceIn(2600L, 9000L)
+            delay(waitMs)
+        }
+        speakingTurnIndex = -1
+        autoPlayingStory = false
     }
 
     LazyColumn(
@@ -351,7 +396,13 @@ private fun StoryReaderView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(onClick = onBack) { Text("المكتبة") }
+                OutlinedButton(
+                    onClick = {
+                        autoPlayingStory = false
+                        speechEngine.stopSpeaking()
+                        onBack()
+                    }
+                ) { Text("المكتبة") }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(
                         selected = shadowingSlow,
@@ -367,13 +418,46 @@ private fun StoryReaderView(
             }
             Spacer(Modifier.height(6.dp))
             SectionHeader(story.titleAr, story.subtitleTarget, story.cefrLevel.code)
+            Spacer(Modifier.height(8.dp))
+            FilledTonalButton(
+                onClick = {
+                    if (autoPlayingStory) {
+                        autoPlayingStory = false
+                        speakingTurnIndex = -1
+                        speechEngine.stopSpeaking()
+                    } else {
+                        autoPlayingStory = true
+                    }
+                },
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("story_autoplay_btn")
+            ) {
+                Icon(
+                    imageVector = if (autoPlayingStory) Icons.Filled.Stop else Icons.Filled.Headphones,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = if (autoPlayingStory) "إيقاف القراءة التلقائية للقصة" else "تشغيل القصة كاملة بأصوات الشخصيات",
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
-        items(story.turns) { turn ->
+        itemsIndexed(story.turns) { idx, turn ->
+            val isSpeaking = speakingTurnIndex == idx
             Card(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSpeaking) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                    else MaterialTheme.colorScheme.surface
+                ),
+                border = if (isSpeaking) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isSpeaking) 3.dp else 1.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -382,10 +466,24 @@ private fun StoryReaderView(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatusPill(turn.speakerName)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            StatusPill(turn.speakerName)
+                            if (isSpeaking) {
+                                StatusPill(
+                                    text = "يتحدث الآن...",
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
                         Row {
                             IconButton(
                                 onClick = {
+                                    autoPlayingStory = false
+                                    speakingTurnIndex = idx
                                     speechEngine.speak(
                                         text = turn.text,
                                         dialectCode = dialect.code,
@@ -522,11 +620,15 @@ fun RealVideosScreen(
             .map { cms -> cmsToVideoLesson(cms) }
         cmsVideos + StoriesVideosCatalog.videoLessons.filter { it.language == activeLang }
     }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     var selectedVideo by remember(activeLang, videos.size) { mutableStateOf(videos.first()) }
     var hideTranscript by remember { mutableStateOf(false) }
     var loopSingleLine by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
-    var activeLineIndex by remember(selectedVideo.id) { mutableStateOf(0) }
+    var activeLineIndex by remember(selectedVideo.id) { mutableIntStateOf(0) }
+    var videoStartSeconds by remember(selectedVideo.id) { mutableIntStateOf(0) }
+    var playerJumpNonce by remember(selectedVideo.id) { mutableIntStateOf(0) }
     var quizChoice by remember(selectedVideo.id) { mutableStateOf<Int?>(null) }
     var showEmbeddedPlayer by remember(selectedVideo.id) { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -559,6 +661,28 @@ fun RealVideosScreen(
         )
     }
 
+    fun jumpVideoToTimestamp(startSec: Int, lineIdx: Int) {
+        // Strict single-audio-source rule: stop TTS immediately before opening/jumping video
+        loopSingleLine = false
+        speechEngine.stopSpeaking()
+        activeLineIndex = lineIdx
+        videoStartSeconds = startSec.coerceAtLeast(0)
+        // Destroy previous WebView cleanly so YouTube mobile reloads at the exact &t=Xs timestamp
+        webViewRef?.let { wv ->
+            runCatching {
+                wv.onPause()
+                wv.loadUrl("about:blank")
+                wv.destroy()
+            }
+        }
+        webViewRef = null
+        playerJumpNonce += 1
+        showEmbeddedPlayer = true
+        scope.launch {
+            listState.animateScrollToItem(1)
+        }
+    }
+
     // Stop all audio cleanly whenever the user switches video or leaves this screen
     DisposableEffect(selectedVideo.id) {
         onDispose {
@@ -578,17 +702,21 @@ fun RealVideosScreen(
         }
     }
 
-    fun openInNativeYouTube(videoId: String) {
+    fun openInNativeYouTube(videoId: String, startSec: Int = videoStartSeconds) {
         speechEngine.stopSpeaking()
         loopSingleLine = false
         stopWebViewVideo()
-        val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId"))
-        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
-        runCatching { context.startActivity(appIntent) }
-            .onFailure { runCatching { context.startActivity(webIntent) } }
+        val timedUrl = if (startSec > 0) {
+            "https://www.youtube.com/watch?v=$videoId&t=${startSec}s"
+        } else {
+            "https://www.youtube.com/watch?v=$videoId"
+        }
+        val timedIntent = Intent(Intent.ACTION_VIEW, Uri.parse(timedUrl))
+        runCatching { context.startActivity(timedIntent) }
     }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -596,7 +724,7 @@ fun RealVideosScreen(
         item {
             SectionHeader(
                 title = "التعلم من فيديوهات حقيقية",
-                subtitle = "شاهد الفيديو أو استمع للجمل المترجمة واحدة تلو الأخرى بدون تداخل صوتي",
+                subtitle = "كل جملة مربوطة بالثانية في الفيديو — اضغط «شاهد اللحظة» للانتقال مباشرة أو «اسمع النطق» للتدرب بصوت واحد واضح",
                 badge = selectedVideo.cefrLevel.code
             )
             Spacer(Modifier.height(8.dp))
@@ -616,8 +744,9 @@ fun RealVideosScreen(
             }
         }
 
-        // Video Stage: Clean Poster Card OR Direct Mobile YouTube WebView (never black iframe)
-        item(key = "video_stage_${selectedVideo.youtubeVideoId}_$showEmbeddedPlayer") {
+        // Video Stage: Clean Poster Card OR Direct Mobile YouTube WebView linked to exact &t=Xs timestamp
+        item(key = "video_stage_${selectedVideo.youtubeVideoId}_${showEmbeddedPlayer}_$playerJumpNonce") {
+            val activeLine = selectedVideo.lines.getOrNull(activeLineIndex)
             ElevatedCard(
                 shape = RoundedCornerShape(22.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -651,15 +780,56 @@ fun RealVideosScreen(
                                             return !(host.contains("youtube.com") || host.contains("youtu.be") || host.contains("google.com"))
                                         }
                                     }
-                                    loadUrl("https://m.youtube.com/watch?v=${selectedVideo.youtubeVideoId}")
+                                    val targetUrl = if (videoStartSeconds > 0) {
+                                        "https://m.youtube.com/watch?v=${selectedVideo.youtubeVideoId}&t=${videoStartSeconds}s"
+                                    } else {
+                                        "https://m.youtube.com/watch?v=${selectedVideo.youtubeVideoId}"
+                                    }
+                                    loadUrl(targetUrl)
                                     webViewRef = this
                                 }
                             },
                             update = { view -> webViewRef = view },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(260.dp)
+                                .height(250.dp)
                         )
+                        // Live synced sentence bar right under the video so learner reads the exact linked line
+                        if (activeLine != null && !hideTranscript) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "الجملة المرتبطة الآن (#${activeLineIndex + 1})",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        StatusPill(
+                                            text = "من ${formatSecondsMmSs(videoStartSeconds)}",
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                    LtrTargetText(activeLine.text, bold = true)
+                                    Text(
+                                        text = activeLine.arabicTranslation,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -669,20 +839,23 @@ fun RealVideosScreen(
                             OutlinedButton(
                                 onClick = { stopWebViewVideo() },
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f).testTag("video_close_embed_btn")
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("video_close_embed_btn")
                             ) {
                                 Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.size(4.dp))
                                 Text("إغلاق المشغّل")
                             }
                             Button(
-                                onClick = { openInNativeYouTube(selectedVideo.youtubeVideoId) },
+                                onClick = { openInNativeYouTube(selectedVideo.youtubeVideoId, videoStartSeconds) },
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f).testTag("video_open_youtube_btn")
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("video_open_youtube_btn")
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.size(4.dp))
-                                Text("فتح في يوتيوب")
+                                Text(
+                                    if (videoStartSeconds > 0) "يوتيوب (${formatSecondsMmSs(videoStartSeconds)})"
+                                    else "فتح في يوتيوب"
+                                )
                             }
                         }
                     }
@@ -692,7 +865,7 @@ fun RealVideosScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(190.dp)
-                                .clickable { openInNativeYouTube(selectedVideo.youtubeVideoId) }
+                                .clickable { openInNativeYouTube(selectedVideo.youtubeVideoId, videoStartSeconds) }
                         ) {
                             Image(
                                 painter = painterResource(id = R.drawable.img_stories_banner_1795256214202),
@@ -737,7 +910,7 @@ fun RealVideosScreen(
                                     color = Color.White
                                 )
                                 Text(
-                                    text = "${selectedVideo.dialect.arabicLabel} • ${selectedVideo.cefrLevel.code} • ${selectedVideo.lines.size} جمل تفاعلية مشروحة",
+                                    text = "${selectedVideo.dialect.arabicLabel} • ${selectedVideo.cefrLevel.code} • ${selectedVideo.lines.size} جمل مربوطة بتوقيت الفيديو",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color.White.copy(alpha = 0.9f)
                                 )
@@ -748,11 +921,11 @@ fun RealVideosScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = { openInNativeYouTube(selectedVideo.youtubeVideoId) },
+                                onClick = { openInNativeYouTube(selectedVideo.youtubeVideoId, videoStartSeconds) },
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .heightIn(min = 48.dp)
                                     .testTag("video_open_youtube_btn")
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -761,19 +934,20 @@ fun RealVideosScreen(
                             }
                             OutlinedButton(
                                 onClick = {
-                                    speechEngine.stopSpeaking()
-                                    loopSingleLine = false
-                                    showEmbeddedPlayer = true
+                                    jumpVideoToTimestamp(
+                                        startSec = selectedVideo.lines.getOrNull(activeLineIndex)?.startSeconds ?: 0,
+                                        lineIdx = activeLineIndex
+                                    )
                                 },
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .heightIn(min = 48.dp)
                                     .testTag("video_embed_toggle_btn")
                             ) {
                                 Icon(Icons.Filled.OndemandVideo, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.size(6.dp))
-                                Text("أو تشغيل صفحة يوتيوب داخل التطبيق")
+                                Text("تشغيل الفيديو داخل التطبيق مع الجمل المربوطة")
                             }
                         }
                     }
@@ -845,38 +1019,32 @@ fun RealVideosScreen(
             }
         }
 
-        // Timestamped Subtitle Lines (Clean Single-Voice Practice)
+        // Timestamped Subtitle Lines — Each line links directly to its exact moment in YouTube OR clean single-voice TTS
         items(selectedVideo.lines.indices.toList()) { idx ->
             val line = selectedVideo.lines[idx]
             val isActive = idx == activeLineIndex
+            val startLabel = formatSecondsMmSs(line.startSeconds)
+            val endLabel = formatSecondsMmSs(line.endSeconds)
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer
+                    containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
                     else MaterialTheme.colorScheme.surface
                 ),
+                border = if (isActive) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 3.dp else 1.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { speakSingleLineCleanly(idx) }
                     .testTag("video_line_$idx")
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatusPill("الجملة ${idx + 1} • ${line.startSeconds}ث - ${line.endSeconds}ث")
+                        StatusPill("الجملة ${idx + 1} • $startLabel ← $endLabel")
                         Row {
-                            IconButton(
-                                onClick = { speakSingleLineCleanly(idx) }
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.VolumeUp,
-                                    contentDescription = "سماع نطق الجملة",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
                             IconButton(
                                 onClick = {
                                     activeLineIndex = idx
@@ -909,10 +1077,40 @@ fun RealVideosScreen(
                         )
                     } else {
                         Text(
-                            text = "وضع الاستماع المركز: اضغط لسماع الجملة واختبر فهمك دون قراءة النص.",
+                            text = "وضع الاستماع المركز: اضغط «اسمع النطق» أو «شاهد اللحظة» واختبر فهمك دون قراءة النص.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    // Crystal-clear separated actions: Jump video to exact timestamp OR clean single-voice TTS
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = { jumpVideoToTimestamp(line.startSeconds, idx) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("video_jump_btn_$idx")
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text("شاهد اللحظة ($startLabel)", maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = { speakSingleLineCleanly(idx) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("video_speak_btn_$idx")
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text("اسمع النطق", maxLines = 1)
+                        }
                     }
                 }
             }
@@ -962,6 +1160,13 @@ fun RealVideosScreen(
             }
         }
     }
+}
+
+private fun formatSecondsMmSs(totalSeconds: Int): String {
+    val safe = totalSeconds.coerceAtLeast(0)
+    val mins = safe / 60
+    val secs = safe % 60
+    return "$mins:${secs.toString().padStart(2, '0')}"
 }
 
 private fun cmsToVideoLesson(cms: CmsContentItem): VideoLesson {

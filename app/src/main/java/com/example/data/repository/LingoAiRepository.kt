@@ -16,6 +16,7 @@ import com.example.data.model.TargetLanguage
 import com.example.data.model.TutorMessage
 import com.example.data.model.TutorScenario
 import com.example.data.model.TutorSessionScorecard
+import com.example.core.activeAppCheckMode
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Schema
@@ -23,19 +24,39 @@ import com.google.firebase.ai.type.ThinkingLevel
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
 import com.google.firebase.ai.type.thinkingConfig
+import com.google.firebase.appcheck.FirebaseAppCheck
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
 private const val TAG = "LingoAiRepository"
 private const val DEFAULT_MODEL = "gemini-3.8-flash"
+private const val FAST_MODEL = "gemini-3.5-flash-lite"
 
 class LingoAiRepository {
 
-    // Fast multi-turn conversational model (official default gemini-3.8-flash, no billing required)
-    private fun createTutorModel(systemPrompt: String, deepThinking: Boolean) =
+    private suspend fun ensureAppCheckReady() {
+        try {
+            withTimeout(12_000L) {
+                FirebaseAppCheck.getInstance().getAppCheckToken(false).await()
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "App Check token timed out after 12s (mode=$activeAppCheckMode)", e)
+            throw IllegalStateException("APPCHECK_TIMEOUT:$activeAppCheckMode", e)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "App Check token failed (mode=$activeAppCheckMode)", e)
+            throw IllegalStateException("APPCHECK_ERROR:$activeAppCheckMode:${e.localizedMessage ?: e.javaClass.simpleName}", e)
+        }
+    }
+
+    // Fast multi-turn conversational model (official free-tier models, zero billing required)
+    private fun createTutorModel(systemPrompt: String, deepThinking: Boolean, useFastModel: Boolean = !deepThinking) =
         if (deepThinking) {
             Firebase.ai.generativeModel(
                 modelName = DEFAULT_MODEL,
@@ -48,7 +69,7 @@ class LingoAiRepository {
             )
         } else {
             Firebase.ai.generativeModel(
-                modelName = DEFAULT_MODEL,
+                modelName = if (useFastModel) FAST_MODEL else DEFAULT_MODEL,
                 systemInstruction = content { text(systemPrompt) }
             )
         }
@@ -265,12 +286,13 @@ class LingoAiRepository {
             }
         }
 
-        val model = createTutorModel(systemPrompt, deepThinking)
+        // Step 1: Verify App Check token fast (max 12s) so we never hang silently for minutes
+        ensureAppCheckReady()
 
         // Strictly alternate user/model turns so previous unanswered user messages don't break chat history
         val sanitizedHistory = mutableListOf<com.google.firebase.ai.type.Content>()
         var expectedRole = "user"
-        history.takeLast(12).forEach { msg ->
+        history.takeLast(10).forEach { msg ->
             val role = if (msg.sender == "user") "user" else "model"
             if (role == expectedRole && msg.text.isNotBlank()) {
                 sanitizedHistory += content(role = role) { text(msg.text) }
@@ -281,47 +303,42 @@ class LingoAiRepository {
             sanitizedHistory.removeAt(sanitizedHistory.lastIndex)
         }
 
-        val accumulated = StringBuilder()
+        // Step 2: Fast unary sendMessage (avoids SSE streaming stalls on mobile 4G networks)
+        val primaryModel = createTutorModel(systemPrompt, deepThinking, useFastModel = !deepThinking)
+        var replyText = ""
         try {
-            val chat = model.startChat(history = sanitizedHistory)
-            withTimeout(45_000L) {
-                chat.sendMessageStream(userInput).collect { chunk ->
-                    val part = chunk.text.orEmpty()
-                    if (part.isNotEmpty()) {
-                        accumulated.append(part)
-                        emit(accumulated.toString())
-                    }
-                }
+            val chat = primaryModel.startChat(history = sanitizedHistory)
+            val response = withTimeout(if (deepThinking) 35_000L else 20_000L) {
+                chat.sendMessage(userInput)
             }
+            replyText = response.text.orEmpty().trim()
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Primary tutor model timed out; trying fallback model", e)
         } catch (e: CancellationException) {
-            if (e !is kotlinx.coroutines.TimeoutCancellationException) throw e
-            Log.w(TAG, "Tutor streaming timed out; falling back to unary sendMessage", e)
+            throw e
         } catch (e: Exception) {
             val msg = e.localizedMessage.orEmpty()
-            val isTimeout = msg.contains("allotted time", ignoreCase = true) ||
-                msg.contains("timeout", ignoreCase = true)
-            if (!isTimeout || accumulated.isNotBlank()) {
-                throw e
-            }
-            Log.w(TAG, "Tutor streaming hit SDK timeout; retrying via unary sendMessage", e)
+            val retryable = msg.contains("allotted time", ignoreCase = true) ||
+                msg.contains("timeout", ignoreCase = true) ||
+                msg.contains("not found", ignoreCase = true) ||
+                msg.contains("404", ignoreCase = true)
+            if (!retryable) throw e
+            Log.w(TAG, "Primary tutor model retryable error ($msg); trying fallback model", e)
         }
 
-        if (accumulated.isBlank()) {
-            // Resilient unary fallback (more reliable across mobile 4G proxies than SSE streaming)
-            val fallbackChat = model.startChat(history = sanitizedHistory)
-            val reply = withTimeout(55_000L) {
+        if (replyText.isBlank()) {
+            val fallbackModel = createTutorModel(systemPrompt, deepThinking = false, useFastModel = false)
+            val fallbackChat = fallbackModel.startChat(history = sanitizedHistory)
+            val reply = withTimeout(22_000L) {
                 fallbackChat.sendMessage(userInput)
             }
-            val text = reply.text.orEmpty().trim()
-            if (text.isNotBlank()) {
-                accumulated.append(text)
-                emit(text)
-            }
+            replyText = reply.text.orEmpty().trim()
         }
 
-        if (accumulated.isBlank()) {
+        if (replyText.isBlank()) {
             throw IllegalStateException("لم يُرجع المدرس الذكي ردًا، يرجى المحاولة مرة أخرى.")
         }
+        emit(replyText)
     }
 
     /**
@@ -348,6 +365,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 pronunciationModel.generateContent(prompt)
             }
@@ -389,6 +407,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 storyGeneratorModel.generateContent(prompt)
             }
@@ -458,6 +477,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 writingGraderModel.generateContent(prompt)
             }
@@ -505,6 +525,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 examGeneratorModel.generateContent(prompt)
             }
@@ -579,6 +600,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 examGraderModel.generateContent(prompt)
             }
@@ -631,6 +653,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 unitLessonGeneratorModel.generateContent(prompt)
             }
@@ -706,6 +729,7 @@ class LingoAiRepository {
         """.trimIndent()
 
         return try {
+            ensureAppCheckReady()
             val response = withTimeout(60_000L) {
                 tutorScorecardModel.generateContent(prompt)
             }

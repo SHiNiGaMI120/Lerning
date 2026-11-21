@@ -120,6 +120,10 @@ private fun LingoWorldAppRoot(
         return
     }
 
+    LaunchedEffect(Unit) {
+        com.example.core.warmUpAppCheckTokenOffMainThread()
+    }
+
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
 
     DisposableEffect(Unit) {
