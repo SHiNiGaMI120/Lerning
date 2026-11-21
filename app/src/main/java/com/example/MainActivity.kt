@@ -12,12 +12,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -65,6 +71,7 @@ import com.example.ui.viewmodel.AiTutorViewModel
 import com.example.ui.viewmodel.DataState
 import com.example.ui.viewmodel.LingoViewModel
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -103,6 +110,16 @@ private fun LingoWorldAppRoot(
     darkTheme: Boolean,
     onToggleDarkTheme: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val firebaseReady = remember(context) {
+        FirebaseApp.getApps(context).isNotEmpty() || FirebaseApp.initializeApp(context) != null
+    }
+
+    if (!firebaseReady) {
+        MissingFirebaseConfigScreen()
+        return
+    }
+
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
 
     DisposableEffect(Unit) {
@@ -124,6 +141,51 @@ private fun LingoWorldAppRoot(
                 darkTheme = darkTheme,
                 onToggleDarkTheme = onToggleDarkTheme
             )
+        }
+    }
+}
+
+@Composable
+private fun MissingFirebaseConfigScreen() {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "ملف إعدادات Firebase غير مرفق بهذه النسخة",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = "تم بناء ملف APK هذا بدون ملف google-services.json، لذلك لا يمكن بدء تسجيل الدخول بحساب Google أو الاتصال بقاعدة البيانات والذكاء الاصطناعي.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "لإصلاح ذلك في GitHub:\n1) افتح Settings ← Secrets and variables ← Actions\n2) أضف سرًا باسم GOOGLE_SERVICES_JSON يحتوي على محتوى ملف app/google-services.json\n3) أضف سرًا باسم DEBUG_KEYSTORE_BASE64 يحتوي على محتوى debug.keystore.base64\n4) أعد تشغيل بناء Build LingoWorld AI APK وحمّل النسخة الجديدة.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
