@@ -75,6 +75,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
+private fun resolveDefaultWebClientId(context: Context): String? {
+    return try {
+        val resId = context.resources.getIdentifier(
+            "default_web_client_id",
+            "string",
+            context.packageName
+        )
+        if (resId == 0) null else context.getString(resId).takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 fun attemptAutoSignIn(
     context: Context,
     credentialManager: CredentialManager,
@@ -86,9 +99,8 @@ fun attemptAutoSignIn(
         onAuthSuccess()
         return
     }
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
+    val clientId = resolveDefaultWebClientId(context)
+    if (clientId == null) {
         onUnauthenticated()
         return
     }
@@ -125,10 +137,9 @@ fun onGoogleSignInClicked(
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
 ) {
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
-        onAuthError("تعذر العثور على إعدادات Google Sign-In في التطبيق.")
+    val clientId = resolveDefaultWebClientId(context)
+    if (clientId == null) {
+        onAuthError("تعذر العثور على إعدادات Google Sign-In في التطبيق (أضف ملف google-services.json عند البناء).")
         return
     }
     val activity = context as? Activity
