@@ -37,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -48,6 +49,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.core.AudioClipRecorder
 import com.example.core.SpeechEngine
@@ -378,6 +380,8 @@ fun LingoNavHost(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isAdmin by lingoViewModel.isAdmin.collectAsStateWithLifecycle()
+
     NavHost(
         navController = navController,
         startDestination = LingoDestination.HOME.route,
@@ -392,7 +396,7 @@ fun LingoNavHost(
                 lessonProgress = lessonProgress,
                 examAttempts = examAttempts,
                 pronunciationLogs = pronunciationLogs,
-                isAdmin = lingoViewModel.isAdmin,
+                isAdmin = isAdmin,
                 onSwitchLanguage = lingoViewModel::switchLanguage,
                 onContinueLastLesson = onContinueLastLesson,
                 onNavigate = { navController.navigateToDestination(it) }
@@ -585,7 +589,7 @@ fun LingoNavHost(
             SettingsScreen(
                 profile = profile,
                 darkThemeEnabled = darkTheme,
-                isAdmin = lingoViewModel.isAdmin,
+                isAdmin = isAdmin,
                 onToggleDarkTheme = onToggleDarkTheme,
                 onSelectDialect = lingoViewModel::selectDialect,
                 onUpdateDailyGoal = lingoViewModel::updateDailyGoal,
@@ -596,7 +600,7 @@ fun LingoNavHost(
 
         composable(LingoDestination.ADMIN.route) {
             AdminCmsScreen(
-                isAdmin = lingoViewModel.isAdmin,
+                isAdmin = isAdmin,
                 cmsItems = cmsItems,
                 adminLearners = adminLearners,
                 onCreateCmsItem = lingoViewModel::createCmsContent,

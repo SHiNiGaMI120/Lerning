@@ -71,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.core.WeekKey
 import com.example.data.curriculum.CurriculumCatalog
 import com.example.data.model.CefrLevel
 import com.example.data.model.ExamAttempt
@@ -85,6 +86,7 @@ import com.example.ui.components.SectionHeader
 import com.example.ui.components.StatusPill
 import com.example.ui.theme.EnglishRoyalBlue
 import com.example.ui.theme.SpanishTerracotta
+import com.google.firebase.Timestamp
 import java.util.Calendar
 
 enum class LingoDestination(val route: String, val labelAr: String) {
@@ -1304,6 +1306,14 @@ fun ProgressGamificationScreen(
     val claimedIds = lessonProgress.map { it.id }.toSet()
     val isOptedIntoLeaderboard = leaderboardEntries.any { it.userId == profile.userId }
 
+    // Weekly challenges only count activity from the current ISO week and can
+    // be claimed once per week (claim markers are week-keyed, e.g.
+    // "weekly_2026-W47_lessons_3").
+    val currentWeekKey = WeekKey.current()
+    val weekStartMillis = WeekKey.currentWeekStartMillis()
+    fun isThisWeek(timestamp: Timestamp?): Boolean =
+        timestamp != null && timestamp.toDate().time >= weekStartMillis
+
     data class WeeklyChallengeUi(
         val id: String,
         val title: String,
@@ -1313,10 +1323,10 @@ fun ProgressGamificationScreen(
     )
 
     val weeklyChallenges = listOf(
-        WeeklyChallengeUi("lessons_3", "أكمل 3 دروس جمل أو قصص أو فيديوهات", lessonProgress.count { it.completed && !it.id.startsWith("weekly_") }, 3, 60L),
-        WeeklyChallengeUi("pron_2", "سجّل وحلّل نطقك مرتين في مختبر النطق", pronunciationLogs.size, 2, 50L),
-        WeeklyChallengeUi("fsrs_5", "احفظ 5 جمل في المراجعة الذكية FSRS", reviewCards.size, 5, 50L),
-        WeeklyChallengeUi("exam_pass", "اجتز اختبار CEFR بنسبة ≥80%", passedExams.size, 1, 100L)
+        WeeklyChallengeUi("lessons_3", "أكمل 3 دروس جمل أو قصص أو فيديوهات", lessonProgress.count { it.completed && !it.id.startsWith("weekly_") && isThisWeek(it.createdAt) }, 3, 60L),
+        WeeklyChallengeUi("pron_2", "سجّل وحلّل نطقك مرتين في مختبر النطق", pronunciationLogs.count { isThisWeek(it.createdAt) }, 2, 50L),
+        WeeklyChallengeUi("fsrs_5", "احفظ 5 جمل في المراجعة الذكية FSRS", reviewCards.count { isThisWeek(it.createdAt) }, 5, 50L),
+        WeeklyChallengeUi("exam_pass", "اجتز اختبار CEFR بنسبة ≥80%", passedExams.count { isThisWeek(it.createdAt) }, 1, 100L)
     )
 
     LazyColumn(
@@ -1365,7 +1375,7 @@ fun ProgressGamificationScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 weeklyChallenges.forEach { ch ->
                     val reached = ch.current >= ch.target
-                    val claimed = claimedIds.contains("weekly_${ch.id}")
+                    val claimed = claimedIds.contains("weekly_${currentWeekKey}_${ch.id}")
                     val progress = (ch.current.toFloat() / ch.target.coerceAtLeast(1)).coerceIn(0f, 1f)
                     Card(
                         shape = RoundedCornerShape(16.dp),

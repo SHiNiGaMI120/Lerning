@@ -14,15 +14,19 @@ import com.example.data.model.PronunciationLog
 import com.example.data.model.ReviewCard
 import com.example.data.model.TargetLanguage
 import com.example.data.model.UserProfile
+import com.example.core.WeekKey
 import com.example.data.repository.LingoRepository
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -41,7 +45,8 @@ class LingoViewModel(
     initialDisplayName: String
 ) : ViewModel() {
 
-    val isAdmin: Boolean = repository.isCurrentUserAdmin()
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
 
     private val _statusBanner = MutableStateFlow<String?>(null)
     val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
@@ -71,9 +76,12 @@ class LingoViewModel(
             .toDataState("فشل تحميل تقدم الدروس")
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), DataState.Loading)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val cmsContentState: StateFlow<DataState<List<CmsContentItem>>> =
-        (if (isAdmin) repository.observeAllCmsContentAdmin(currentUserId)
-        else repository.observePublishedCmsContent(currentUserId))
+        isAdmin.flatMapLatest { admin ->
+            if (admin) repository.observeAllCmsContentAdmin(currentUserId)
+            else repository.observePublishedCmsContent(currentUserId)
+        }
             .toDataState("فشل تحميل مكتبة المحتوى السحابية")
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), DataState.Loading)
 
@@ -87,16 +95,22 @@ class LingoViewModel(
             .toDataState("فشل تحميل لوحة المتصدرين")
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), DataState.Success(emptyList()))
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val adminLearnersState: StateFlow<DataState<List<UserProfile>>> =
-        if (isAdmin) {
-            repository.observeAllLearnersAdmin(currentUserId)
-                .toDataState("فشل تحميل تقارير المتعلمين")
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), DataState.Success(emptyList()))
-        } else {
-            MutableStateFlow(DataState.Success(emptyList()))
+        isAdmin.flatMapLatest { admin ->
+            if (admin) {
+                repository.observeAllLearnersAdmin(currentUserId)
+                    .toDataState("فشل تحميل تقارير المتعلمين")
+            } else {
+                flowOf<DataState<List<UserProfile>>>(DataState.Success(emptyList()))
+            }
         }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), DataState.Success(emptyList()))
 
     init {
+        viewModelScope.launch {
+            _isAdmin.value = repository.isCurrentUserAdmin()
+        }
         viewModelScope.launch {
             val result = repository.ensureUserProfile(initialDisplayName)
             result.onFailure {
@@ -368,17 +382,21 @@ class LingoViewModel(
         bonusXp: Long = 50L
     ) {
         viewModelScope.launch {
-            repository.saveLessonProgress(
-                progressId = "weekly_$challengeId",
+            // Week-keyed claim id: the challenge can be claimed once per ISO week.
+            val progressId = "weekly_${WeekKey.current()}_$challengeId"
+            repository.claimWeeklyChallenge(
+                progressId = progressId,
                 language = language.code,
-                cefrLevel = level.code,
-                unitNumber = 1,
-                lessonNumber = 1,
-                contentType = "skill",
-                score = 100
-            ).onSuccess {
-                repository.rewardXp(xpDelta = bonusXp)
-                _statusBanner.value = "ممتاز! تم إتمام التحدي الأسبوعي وإضافة +$bonusXp XP"
+                cefrLevel = level.code
+            ).onSuccess { granted ->
+                if (granted) {
+                    // Only the displayed weekly bonus is granted; the claim
+                    // record itself never triggers the normal lesson reward.
+                    repository.rewardXp(xpDelta = bonusXp)
+                    _statusBanner.value = "ممتاز! تم إتمام التحدي الأسبوعي وإضافة +$bonusXp XP"
+                } else {
+                    _statusBanner.value = "تم استلام مكافأة هذا التحدي لهذا الأسبوع بالفعل"
+                }
             }.onFailure {
                 _statusBanner.value = "تعذر استلام مكافأة التحدي: ${it.localizedMessage}"
             }
