@@ -72,16 +72,21 @@ jobs:
 
       - name: Verify Firebase config is bundled in the APK
         run: |
-          GEN="app/build/generated/res/google-services/debug/values/values.xml"
-          if [ ! -f "$GEN" ] || ! grep -q 'name="google_api_key"' "$GEN"; then
-            echo "::error::The google-services plugin did not generate Firebase resources. The APK would be Firebase-dead, so the build fails here instead of uploading it."
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK" ]; then
+            echo "::error::Expected APK not found at $APK"
             exit 1
           fi
-          if ! unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'resources.arsc'; then
-            echo "::error::Expected APK not found at app/build/outputs/apk/debug/app-debug.apk"
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('app/google-services.json'))['project_info']['project_id'])")
+          GEN=$(find app/build/generated -name 'values.xml' -path '*google*' 2>/dev/null | head -n 1)
+          if [ -n "$GEN" ] && grep -q "$PROJECT_ID" "$GEN"; then
+            echo "OK: google-services plugin generated Firebase resources for project $PROJECT_ID."
+          elif unzip -p "$APK" resources.arsc | grep -aq "$PROJECT_ID"; then
+            echo "OK: APK contains Firebase configuration for project $PROJECT_ID."
+          else
+            echo "::error::Could not confirm Firebase config for project $PROJECT_ID in the build outputs. The APK may be Firebase-dead, so the build fails here instead of uploading it."
             exit 1
           fi
-          echo "OK: Firebase resources generated and debug APK produced."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
