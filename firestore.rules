@@ -28,14 +28,12 @@ service cloud.firestore {
       return resource.data;
     }
 
+    // Admin membership lives only in the console-managed admins/{uid}
+    // registry (see the admins match block below: never client-writable).
+    // No admin identity is hard-coded in client-visible code.
     function isAdmin() {
-      return isSignedIn() && (
-        ('email' in request.auth.token &&
-         'email_verified' in request.auth.token &&
-         request.auth.token.email == 'liongang377@gmail.com' &&
-         request.auth.token.email_verified == true) ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isValidLanguage(lang) {
