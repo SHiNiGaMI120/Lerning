@@ -376,7 +376,8 @@ class LingoRepository(
         sender: String,
         text: String,
         arabicExplanation: String = "",
-        deepThinking: Boolean = false
+        deepThinking: Boolean = false,
+        stableId: String? = null
     ): Result<Unit> {
         val uid = auth.currentUser?.uid
         val path = "users/${uid ?: "unauthenticated"}/tutorMessages"
@@ -384,7 +385,15 @@ class LingoRepository(
             val verifiedUid = requireUserId()
             val safeText = text.trim().take(8000)
             require(safeText.isNotEmpty()) { "Message text cannot be blank" }
-            val docRef = db.collection("users").document(verifiedUid).collection("tutorMessages").document()
+            val collection = db.collection("users").document(verifiedUid).collection("tutorMessages")
+            val docRef = if (stableId != null && stableId.matches(Regex("[A-Za-z0-9_-]{1,120}"))) collection.document(stableId) else collection.document()
+            if (stableId != null) {
+                val existing = docRef.get(com.google.firebase.firestore.Source.SERVER).await()
+                if (existing.exists()) {
+                    require(existing.getString("text") == safeText && existing.getString("sender") == sender && existing.getString("scenarioId") == scenarioId.take(64)) { "Saved voice message differs from retry" }
+                    return Result.success(Unit)
+                }
+            }
             val payload = mapOf(
                 "scenarioId" to scenarioId.take(64),
                 "language" to if (language == "ES") "ES" else "EN",
