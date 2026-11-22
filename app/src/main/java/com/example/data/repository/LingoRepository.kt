@@ -33,8 +33,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
-private const val ADMIN_EMAIL = "liongang377@gmail.com"
-
 class LingoRepository(
     private val db: FirebaseFirestore,
     private val auth: FirebaseAuth = Firebase.auth
@@ -50,9 +48,22 @@ class LingoRepository(
             ?: throw IllegalStateException("يجب تسجيل الدخول بحساب Google أولًا.")
     }
 
-    fun isCurrentUserAdmin(): Boolean {
+    /**
+     * Admin membership is resolved from the console-managed `admins/{uid}`
+     * registry (enforced by Firestore rules), never from a client-side email
+     * constant. Admins are granted by creating their uid document in the
+     * `admins` collection from the Firebase console.
+     */
+    suspend fun isCurrentUserAdmin(): Boolean {
         val user = auth.currentUser ?: return false
-        return user.email.equals(ADMIN_EMAIL, ignoreCase = true) && user.isEmailVerified
+        if (!user.isEmailVerified) return false
+        return try {
+            db.collection("admins").document(user.uid).get().await().exists()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // --- User Profile ---
@@ -602,6 +613,61 @@ class LingoRepository(
                 rewardXp(xpDelta = 40L, listeningDeltaMinutes = 4L, lessonCompletedDelta = 1L)
             }
             Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, path)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Atomically records a weekly-challenge claim marker.
+     *
+     * Unlike [saveLessonProgress], this never grants the normal lesson reward.
+     * The claim runs in a transaction so a double-tap or retry cannot record
+     * the claim twice. Returns Result.success(true) when this call created
+     * the marker (the caller should grant the bonus XP), or
+     * Result.success(false) when the challenge was already claimed.
+     *
+     * [progressId] must be week-keyed by the caller (e.g.
+     * "weekly_2026-W47_lessons_3") so claims reset every week.
+     */
+    suspend fun claimWeeklyChallenge(
+        progressId: String,
+        language: String,
+        cefrLevel: String
+    ): Result<Boolean> {
+        val uid = auth.currentUser?.uid
+        val safeId = progressId.replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(100)
+        val path = "users/${uid ?: "unauthenticated"}/lessonProgress/$safeId"
+        return try {
+            val verifiedUid = requireUserId()
+            val docRef = db.collection("users").document(verifiedUid)
+                .collection("lessonProgress").document(safeId)
+            val created = db.runTransaction { transaction ->
+                val snap = transaction.get(docRef)
+                if (snap.exists()) {
+                    false
+                } else {
+                    transaction.set(
+                        docRef,
+                        mapOf(
+                            "language" to if (language == "ES") "ES" else "EN",
+                            "cefrLevel" to cefrLevel,
+                            "unitNumber" to 1L,
+                            "lessonNumber" to 1L,
+                            "contentType" to "skill",
+                            "completed" to true,
+                            "score" to 100L,
+                            "createdAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    true
+                }
+            }.await()
+            Result.success(created)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
