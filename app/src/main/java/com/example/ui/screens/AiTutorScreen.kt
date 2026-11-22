@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -102,6 +104,7 @@ fun AiTutorScreen(
     var deepThinkingEnabled by remember { mutableStateOf(false) }
     var draftInput by remember { mutableStateOf("") }
     var showNewSessionConfirm by remember { mutableStateOf(false) }
+    var showVoiceCall by remember { mutableStateOf(false) }
 
     val messagesState by aiViewModel.messagesState.collectAsStateWithLifecycle()
     val streamState by aiViewModel.tutorStreamState.collectAsStateWithLifecycle()
@@ -169,7 +172,22 @@ fun AiTutorScreen(
         )
     }
 
+    if (showVoiceCall) {
+        Dialog(onDismissRequest = { showVoiceCall = false }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            VoiceTutorCallScreen(profile, selectedScenario, aiViewModel, speechEngine,
+                onClose = { showVoiceCall = false }, onSaveSentence = onSaveSentence)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        Button(
+            onClick = {
+                aiViewModel.cancelTutorRequest()
+                speechEngine.stopListening(); speechEngine.stopSpeaking()
+                showVoiceCall = true
+            },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("tutor_open_voice_call")
+        ) { Text("مكالمة مع المدرس الصوتي") }
         // Tutor Header + Deep Thinking Toggle
         Surface(
             tonalElevation = 2.dp,

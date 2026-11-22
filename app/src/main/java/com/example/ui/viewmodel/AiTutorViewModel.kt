@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.util.Log
+import com.example.core.VoiceTurn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.CefrLevel
@@ -120,6 +121,35 @@ class AiTutorViewModel(
             } catch (e: Exception) {
                 Log.e(TAG, "Unit lesson generation failed", e)
                 _generatedUnitLessonState.value = AiOpState.Error(formatAiError(e, "تعذر توليد درس جديد بالذكاء الاصطناعي."))
+            }
+        }
+    }
+
+    private val _voiceSaveState = MutableStateFlow<AiOpState<Unit>>(AiOpState.Idle)
+    val voiceSaveState = _voiceSaveState.asStateFlow()
+    private val analyzedVoiceCalls = mutableSetOf<String>()
+
+    fun resetVoiceResult() {
+        _voiceSaveState.value = AiOpState.Idle
+        clearSessionScorecard()
+    }
+
+    fun finishVoiceCall(callId: String, turns: List<VoiceTurn>, profile: com.example.data.model.UserProfile, scenario: TutorScenario) {
+        if (turns.none { it.sender == "user" && it.text.isNotBlank() }) return
+        if (_voiceSaveState.value is AiOpState.Loading) return
+        _voiceSaveState.value = AiOpState.Loading
+        val messages = turns.map { TutorMessage(sender = it.sender, text = it.text, language = profile.activeLanguage, scenarioId = scenario.id) }
+        viewModelScope.launch {
+            try {
+                for (sender in listOf("user", "tutor")) {
+                    val text = turns.filter { it.sender == sender }.joinToString("\n") { it.text }.take(8000)
+                    if (text.isNotBlank()) repository.addTutorMessage(scenario.id, profile.activeLanguage, sender, text, stableId = "voice_${callId}_$sender").getOrThrow()
+                }
+                _voiceSaveState.value = AiOpState.Success(Unit)
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _voiceSaveState.value = AiOpState.Error("تعذر حفظ النص في السجل. النص لسه ظاهر هنا وتقدر تعيد الحفظ.") }
+            if (analyzedVoiceCalls.add(callId)) {
+                generateSessionScorecard(profile.currentLanguageEnum(), Dialect.fromCode(profile.currentDialectCode(), profile.currentLanguageEnum()), profile.currentLevelEnum(), scenario, messages)
             }
         }
     }
@@ -250,7 +280,8 @@ class AiTutorViewModel(
         cefrLevel: CefrLevel,
         existingMessages: List<TutorMessage>,
         userInput: String,
-        deepThinking: Boolean
+        deepThinking: Boolean,
+        onSpokenReply: ((String) -> Unit)? = null
     ) {
         val trimmed = userInput.trim()
         if (trimmed.isEmpty()) return
@@ -300,6 +331,7 @@ class AiTutorViewModel(
                 )
                 repository.rewardXp(xpDelta = if (deepThinking) 25L else 15L)
                 _tutorStreamState.value = AiOpState.Idle
+                onSpokenReply?.invoke(targetPart)
             } catch (e: TimeoutCancellationException) {
                 Log.e(TAG, "Tutor stream timed out", e)
                 _tutorStreamState.value = AiOpState.Error("استغرق الرد وقتًا أطول من المعتاد. اضغط إرسال مجددًا أو جرب الواي فاي.")
