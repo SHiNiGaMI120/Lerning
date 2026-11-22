@@ -127,6 +127,15 @@ class LingoViewModel(
         _statusBanner.value = message
     }
 
+    suspend fun configureLearning(language: TargetLanguage, level: CefrLevel, minutes: Int): Result<Unit> {
+        val levelField = if (language == TargetLanguage.ES) "spanishLevel" else "englishLevel"
+        return repository.updateProfileFields(mapOf(
+            "activeLanguage" to language.code,
+            levelField to level.code,
+            "dailyGoalMinutes" to minutes.coerceIn(5, 180).toLong()
+        ))
+    }
+
     fun switchLanguage(language: TargetLanguage) {
         viewModelScope.launch {
             repository.updateProfileFields(mapOf("activeLanguage" to language.code))
