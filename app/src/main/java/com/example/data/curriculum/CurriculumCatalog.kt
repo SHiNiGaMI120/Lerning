@@ -132,17 +132,22 @@ object CurriculumCatalog {
         unitNumber: Int,
         lessonNumber: Int
     ): List<SentenceLessonItem> {
+        require(unitNumber in 1..12) { "Unit must be between 1 and 12" }
+        require(lessonNumber in 1..10) { "Lesson must be between 1 and 10" }
         val bank = if (language == TargetLanguage.EN) englishBank(level) else spanishBank(level)
-        val offset = ((unitNumber - 1) * 2 + (lessonNumber - 1)) % bank.size
-        val rotated = (0 until minOf(4, bank.size)).map { i ->
-            val base = bank[(offset + i) % bank.size]
-            base.copy(
-                id = "${language.code.lowercase()}_${level.code.lowercase()}_u${unitNumber}_l${lessonNumber}_s${i + 1}",
-                unitNumber = unitNumber,
-                lessonNumber = lessonNumber
+        val theme = unitThemesByLevel.getValue(level)[unitNumber - 1].first
+        val themed = ExpandedCurriculum.itemsFor(language, level, unitNumber, theme)
+        // Keep the unit's two new targets, then revisit two earlier base examples.
+        // Ten lesson activities intentionally revisit a unit's language for retrieval practice.
+        val reviewOffset = (lessonNumber - 1) % bank.size
+        val chosen = (if (lessonNumber % 2 == 0) themed.reversed() else themed) +
+            listOf(bank[reviewOffset], bank[(reviewOffset + 1) % bank.size])
+        return chosen.mapIndexed { index, item ->
+            item.copy(
+                id = "${language.code.lowercase()}_${level.code.lowercase()}_u${unitNumber}_l${lessonNumber}_s${index + 1}",
+                unitNumber = unitNumber, lessonNumber = lessonNumber
             )
         }
-        return rotated
     }
 
     private fun englishBank(level: CefrLevel): List<SentenceLessonItem> = when (level) {
@@ -832,6 +837,6 @@ object CurriculumCatalog {
                 },
                 correctIndex = 1
             )
-        )
+        ) + ExpandedCurriculum.examQuestionsFor(language, level)
     }
 }
