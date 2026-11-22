@@ -65,6 +65,7 @@ import com.example.ui.navigation.navigateToDestination
 import com.example.ui.navigation.navigateToTopLevel
 import com.example.ui.navigation.routeToDestination
 import com.example.ui.screens.ActiveLessonResume
+import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.LingoDestination
 import com.example.ui.theme.LingoWorldTheme
 import com.example.ui.viewmodel.AiTutorViewModel
@@ -271,6 +272,36 @@ private fun AuthenticatedLingoShell(
     val savedStories = (savedStoriesState as? DataState.Success)?.data.orEmpty()
     val leaderboardEntries = (leaderboardState as? DataState.Success)?.data.orEmpty()
     val adminLearners = (adminLearnersState as? DataState.Success)?.data.orEmpty()
+
+    val setupPrefs = remember(context) { context.getSharedPreferences("learning_setup", android.content.Context.MODE_PRIVATE) }
+    var setupDone by remember(currentUserId) { mutableStateOf(setupPrefs.getBoolean(currentUserId, false)) }
+    var setupSaving by remember { mutableStateOf(false) }
+    var setupError by remember { mutableStateOf<String?>(null) }
+    if (!setupDone && profileState is DataState.Success && (profileState as DataState.Success).data != null) {
+        OnboardingScreen(
+            profile = profile,
+            saving = setupSaving,
+            error = setupError,
+            onFinish = { language, level, minutes ->
+                setupSaving = true
+                setupError = null
+                scope.launch {
+                    lingoViewModel.configureLearning(language, level, minutes)
+                        .onSuccess {
+                            setupPrefs.edit().putBoolean(currentUserId, true).apply()
+                            setupDone = true
+                        }
+                        .onFailure { setupError = "تعذر حفظ اختياراتك. اتأكد من الإنترنت وجرب تاني." }
+                    setupSaving = false
+                }
+            },
+            onSkip = {
+                setupPrefs.edit().putBoolean(currentUserId, true).apply()
+                setupDone = true
+            }
+        )
+        return
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useNavRail = maxWidth >= 680.dp
