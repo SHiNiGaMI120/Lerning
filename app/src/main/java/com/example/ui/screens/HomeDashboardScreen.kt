@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -80,6 +81,7 @@ import com.example.data.model.LessonProgress
 import com.example.data.model.PronunciationLog
 import com.example.data.model.ReviewCard
 import com.example.data.model.TargetLanguage
+import com.example.data.model.TutorMessage
 import com.example.data.model.UserProfile
 import com.example.ui.components.LtrTargetText
 import com.example.ui.components.SectionHeader
@@ -179,13 +181,14 @@ fun HomeDashboardScreen(
     examAttempts: List<ExamAttempt>,
     pronunciationLogs: List<PronunciationLog>,
     isAdmin: Boolean,
+    tutorMessages: List<TutorMessage> = emptyList(),
     onSwitchLanguage: (TargetLanguage) -> Unit,
     onContinueLastLesson: (ActiveLessonResume) -> Unit,
     onNavigate: (LingoDestination) -> Unit
 ) {
     val activeLang = profile.currentLanguageEnum()
     val now = System.currentTimeMillis()
-    val dueCardsCount = reviewCards.count { it.nextReviewEpochMs <= now }
+    val dueCardsCount = reviewCards.count { it.language == activeLang.code && it.nextReviewEpochMs <= now }
     val enLessonsDone = lessonProgress.count { it.language == "EN" && it.completed }
     val esLessonsDone = lessonProgress.count { it.language == "ES" && it.completed }
     val avgPronunciation = if (pronunciationLogs.isEmpty()) 0 else {
@@ -205,9 +208,23 @@ fun HomeDashboardScreen(
     val dailyGoalMinutes = profile.dailyGoalMinutes.coerceAtLeast(5L)
     val dailyProgressRatio = (profile.listeningMinutes.toFloat() / dailyGoalMinutes.toFloat()).coerceIn(0f, 1f)
 
+    var showExplore by remember { mutableStateOf(false) }
+    val dailySteps = dailyJourneyCompletion(activeLang.code, lessonProgress, pronunciationLogs, tutorMessages, reviewCards, now)
+    val nextIndex = dailySteps.indexOfFirst { !it }
+    val startNextStep: () -> Unit = {
+        when (nextIndex) {
+            0 -> onContinueLastLesson(activeLesson)
+            1 -> onNavigate(LingoDestination.PRONUNCIATION)
+            2 -> onNavigate(LingoDestination.AI_TUTOR)
+            3 -> onNavigate(LingoDestination.REVIEW)
+            else -> onNavigate(LingoDestination.PROGRESS)
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .testTag("home_dashboard_list"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -312,7 +329,7 @@ fun HomeDashboardScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "الهدف اليومي: ${profile.listeningMinutes} / $dailyGoalMinutes دقيقة",
+                                    text = "هدفك: $dailyGoalMinutes دقيقة يوميًا",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = Color.White
                                 )
@@ -324,7 +341,7 @@ fun HomeDashboardScreen(
                                 )
                             }
                             LinearProgressIndicator(
-                                progress = { dailyProgressRatio.coerceAtLeast(0.06f) },
+                                progress = { dailySteps.count { it } / 4f },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(6.dp)
@@ -338,35 +355,16 @@ fun HomeDashboardScreen(
             }
         }
 
-        // 2. Prominent 'Continue Learning' Hero Card
         item {
-            ContinueLearningHeroCard(
-                activeLesson = activeLesson,
-                onContinueClick = { onContinueLastLesson(activeLesson) },
-                onOpenTutorClick = { onNavigate(LingoDestination.AI_TUTOR) }
-            )
-        }
-
-        // 3. Guided 4-Step Daily Mission (Clear logical direction — never get lost!)
-        item {
-            val hasStoryOrVideo = lessonProgress.any { it.completed && (it.contentType == "story" || it.contentType == "video") }
-            val hasLessonDone = (enLessonsDone + esLessonsDone) > 0
-            val hasSpeakingDone = pronunciationLogs.isNotEmpty()
-            val hasReviewOrExamDone = examAttempts.isNotEmpty() || (reviewCards.isNotEmpty() && dueCardsCount == 0)
-
             GuidedDailyJourneyCard(
-                step1Done = hasLessonDone,
-                step2Done = hasStoryOrVideo,
-                step3Done = hasSpeakingDone,
-                step4Done = hasReviewOrExamDone,
+                step1Done = dailySteps[0], step2Done = dailySteps[1],
+                step3Done = dailySteps[2], step4Done = dailySteps[3],
                 dueCardsCount = dueCardsCount,
                 onStep1 = { onContinueLastLesson(activeLesson) },
-                onStep2 = { onNavigate(LingoDestination.STORIES) },
+                onStep2 = { onNavigate(LingoDestination.PRONUNCIATION) },
                 onStep3 = { onNavigate(LingoDestination.AI_TUTOR) },
-                onStep4 = {
-                    if (dueCardsCount > 0) onNavigate(LingoDestination.REVIEW)
-                    else onNavigate(LingoDestination.TESTS)
-                }
+                onStep4 = { onNavigate(LingoDestination.REVIEW) },
+                onNextStep = startNextStep
             )
         }
 
@@ -379,6 +377,19 @@ fun HomeDashboardScreen(
             )
         }
 
+        if (isAdmin) {
+            item {
+                OutlinedButton(onClick = { onNavigate(LingoDestination.ADMIN) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("لوحة الإدارة والمحتوى")
+                }
+            }
+        }
+        item {
+            OutlinedButton(onClick = { showExplore = !showExplore }, modifier = Modifier.fillMaxWidth().testTag("home_explore_toggle")) {
+                Text(if (showExplore) "إخفاء الأقسام الإضافية" else "استكشف باقي التطبيق: قصص، فيديوهات، اختبارات")
+            }
+        }
+        if (showExplore) {
         // 4. Quick Overview of Current Language Progress (English & Spanish)
         item {
             SectionHeader(
@@ -505,6 +516,7 @@ fun HomeDashboardScreen(
             }
             FeatureTileGrid(items = evaluationItems, onNavigate = onNavigate)
         }
+    }
     }
 }
 
@@ -718,17 +730,18 @@ private fun GuidedDailyJourneyCard(
     onStep1: () -> Unit,
     onStep2: () -> Unit,
     onStep3: () -> Unit,
-    onStep4: () -> Unit
+    onStep4: () -> Unit,
+    onNextStep: () -> Unit
 ) {
     val completedSteps = listOf(step1Done, step2Done, step3Done, step4Done).count { it }
     val nextStepIndex = listOf(step1Done, step2Done, step3Done, step4Done).indexOfFirst { !it }.let {
-        if (it == -1) 3 else it
+        it
     }
 
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.42f)
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -745,35 +758,45 @@ private fun GuidedDailyJourneyCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "خريطة يومك (ابدأ بالترتيب)",
+                        text = if (completedSteps == 4) "برافو! خلصت خطة النهارده 🎉" else "خطة النهارده، خطوة بخطوة",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "اتّبع الخطوات الأربع بالترتيب حتى لا تتشتت",
+                        text = "درس، نطق، محادثة، مراجعة. الإنجاز بيتحسب من تدريبك الفعلي النهارده.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 StatusPill(
-                    text = "$completedSteps / 4",
+                    text = "$completedSteps من 4",
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
 
             LinearProgressIndicator(
-                progress = { (completedSteps / 4f).coerceAtLeast(0.08f) },
+                progress = { completedSteps / 4f },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(7.dp)
                     .clip(RoundedCornerShape(100.dp))
             )
 
+            Button(onClick = onNextStep, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("home_next_step_button")) {
+                Text(when (nextStepIndex) {
+                    0 -> "ابدأ درس النهارده"
+                    1 -> "الخطوة الجاية: درّب نطقك"
+                    2 -> "الخطوة الجاية: المدرس الذكي"
+                    3 -> "الخطوة الجاية: المراجعة"
+                    else -> "شوف تقدمك وإنجازاتك"
+                })
+            }
+
             GuidedStepRow(
                 number = 1,
                 title = "العب درس اليوم التفاعلي",
-                subtitle = "اسمع الجملة ← ركّبها كلعبة ← اكسب النجوم (+40 XP)",
+                subtitle = "اسمع الجملة وركّبها بنفسك",
                 done = step1Done,
                 highlighted = nextStepIndex == 0,
                 onClick = onStep1,
@@ -781,8 +804,8 @@ private fun GuidedDailyJourneyCard(
             )
             GuidedStepRow(
                 number = 2,
-                title = "عِش اللغة في قصة تفاعلية",
-                subtitle = "اختر ردودك وغيّر أحداث القصة (+40 XP)",
+                title = "درّب نطقك بصوتك",
+                subtitle = "سجّل جملة وشوف إيه محتاج يتحسن",
                 done = step2Done,
                 highlighted = nextStepIndex == 1,
                 onClick = onStep2,
@@ -791,7 +814,7 @@ private fun GuidedDailyJourneyCard(
             GuidedStepRow(
                 number = 3,
                 title = "تحدّث مع المدرس الذكي",
-                subtitle = "محادثة قصيرة مع تصحيح فوري بالعربية (+25 XP)",
+                subtitle = "طبّق اللي اتعلمته في حوار قصير",
                 done = step3Done,
                 highlighted = nextStepIndex == 2,
                 onClick = onStep3,
@@ -799,8 +822,8 @@ private fun GuidedDailyJourneyCard(
             )
             GuidedStepRow(
                 number = 4,
-                title = if (dueCardsCount > 0) "راجع $dueCardsCount جملة مستحقة الآن" else "اختبر مستواك في CEFR",
-                subtitle = if (dueCardsCount > 0) "تثبيت سريع بذكاء FSRS (+30 XP)" else "احصل على تقييم رسمي وشهادة (+50 XP)",
+                title = if (dueCardsCount > 0) "راجع $dueCardsCount جملة مستحقة الآن" else "ثبّت اللي اتعلمته بالمراجعة",
+                subtitle = if (dueCardsCount > 0) "راجع جملة وقيّم تذكّرك ليها" else "لو لسه مفيش بطاقات، احفظ جملة من الدرس الأول",
                 done = step4Done,
                 highlighted = nextStepIndex == 3,
                 onClick = onStep4,
