@@ -24,6 +24,8 @@ import com.example.data.model.*
 import com.example.ui.viewmodel.*
 import java.util.UUID
 import com.example.ui.components.LtrTargetText
+import com.example.ui.components.StudioVoiceBanner
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun VoiceTutorCallScreen(
@@ -180,6 +182,7 @@ fun VoiceTutorPanel(
                 }
                 Text("المايك بيشتغل بس لما تبدأ. الصوت بيتبعت لـ Google للرد، والنص يتحفظ في سجل التطبيق بعد إنهاء المكالمة. الخروج أو قفل الشاشة بيوقف المايك.", style = MaterialTheme.typography.bodySmall)
             }
+            item { StudioVoiceBanner() }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !strict, onClick = { onStrict(false) }, enabled = !active && !busy && !listening && !finished, label = { Text("مدرس صبور") }, modifier = Modifier.testTag("voice_patient"))
@@ -193,7 +196,7 @@ fun VoiceTutorPanel(
             }
             notice?.let { item { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             item {
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(when {
                             finished -> "انتهى التدريب، برافو عليك!"
@@ -231,7 +234,7 @@ fun VoiceTutorPanel(
                     when (summary) {
                         is AiOpState.Loading -> Text("بنجهز ملخصك من نص المحادثة...")
                         is AiOpState.Error -> Text(summary.message, color = MaterialTheme.colorScheme.error)
-                        is AiOpState.Success -> Card(Modifier.fillMaxWidth()) {
+                        is AiOpState.Success -> Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("ملخص تدريبك", style = MaterialTheme.typography.titleLarge)
                                 Text("تقييم للنص، مش تحليل صوتي للنطق", style = MaterialTheme.typography.labelSmall)
@@ -248,7 +251,7 @@ fun VoiceTutorPanel(
             }
             if (state.turns.isNotEmpty()) item { Text("نص المحادثة (ممكن التفريغ يغلط)", style = MaterialTheme.typography.titleMedium) }
             items(state.turns) { turn ->
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         Text(if (turn.sender == "user") "أنت" else "المدرس", fontWeight = FontWeight.Bold)
                         LtrTargetText(turn.text)
