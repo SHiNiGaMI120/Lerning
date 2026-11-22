@@ -11,7 +11,8 @@ const PROJECT_ID = process.env.GCP_PROJECT || "demo-no-project";
 const ALICE_UID = "alice_learner_01";
 const BOB_UID = "bob_learner_02";
 const ADMIN_UID = "admin_founder_01";
-const ADMIN_EMAIL = "liongang377@gmail.com";
+// Admin access is granted via the admins/{uid} registry, not via any email.
+const ADMIN_EMAIL = "founder@example.com";
 
 const [emulatorHost, emulatorPortStr] = (
   process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8085"
@@ -275,16 +276,24 @@ test("Per-user subcollections: reviewCards, tutorMessages, examAttempts, pronunc
   );
 });
 
-test("CMS Content: verified admin can manage; spoofed unverified admin fails; learners only query published content", async () => {
+test("CMS Content: admins-registry member can manage; email alone grants nothing; learners only query published content", async () => {
+  // Admin membership is seeded in the admins/{uid} registry (console-managed
+  // in production), bypassing rules like the Firebase console does.
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection("admins").doc(ADMIN_UID).set({ role: "admin" });
+  });
+
   const adminDb = testEnv
     .authenticatedContext(ADMIN_UID, { email: ADMIN_EMAIL, email_verified: true })
     .firestore();
+  // A token carrying an email (even a verified one) is NOT an admins-registry
+  // member, so it must get no admin access.
   const spoofedAdminDb = testEnv
-    .authenticatedContext("spoof_uid", { email: ADMIN_EMAIL, email_verified: false })
+    .authenticatedContext("spoof_uid", { email: ADMIN_EMAIL, email_verified: true })
     .firestore();
   const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
 
-  // Spoofed unverified admin email MUST fail
+  // Email-based spoof without admins-registry membership MUST fail
   await assertFails(
     spoofedAdminDb.collection("cmsContent").doc("cms_spoof").set(validCmsItem("spoof_uid", true))
   );
@@ -366,4 +375,3 @@ test("SavedStories & Opt-In Leaderboard: enforce owner isolation, opt-in write o
   // Alice can opt out (delete her own entry)
   await assertSucceeds(aliceDb.collection("leaderboard").doc(ALICE_UID).delete());
 });
-
