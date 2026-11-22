@@ -35,6 +35,8 @@ class ExpandedCurriculumUiTest {
                 speech, recorder, { saved = it.sentence }, {}, {}, {})
         } }
         compose.onNodeWithText(items.first().sentence).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(items.first().arabicTranslation).assertDoesNotExist()
+        compose.onNodeWithTag("sentence_reveal_translation").performScrollTo().performClick()
         compose.onNodeWithText(items.first().arabicTranslation).assertExists()
         compose.waitForIdle()
         compose.runOnUiThread {
@@ -45,7 +47,8 @@ class ExpandedCurriculumUiTest {
         }
         compose.onNodeWithTag("save_sentence_fsrs_btn").performScrollTo().performClick()
         assertEquals(items.first().sentence, saved)
-        compose.onNodeWithTag("toggle_grammar_drawer_btn").performScrollTo().performClick()
+        compose.onNodeWithTag("lesson_game_list").performScrollToNode(hasTestTag("toggle_grammar_drawer_btn"))
+        compose.onNodeWithTag("toggle_grammar_drawer_btn").performClick()
         compose.onNodeWithText(items.first().expressionNoteAr).assertExists()
         speech.release()
         recorder.resetClip()
