@@ -8,6 +8,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
@@ -247,7 +250,7 @@ fun LingoTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onSurface
         )
     )
@@ -262,7 +265,7 @@ fun LingoBottomNavigationBar(
     val activeTab = currentDestination.parentPrimaryTab()
 
     NavigationBar(
-        modifier = modifier.testTag("main_bottom_nav_bar"),
+        modifier = modifier.padding(horizontal = 14.dp, vertical = 8.dp).clip(RoundedCornerShape(28.dp)).testTag("main_bottom_nav_bar"),
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
         windowInsets = WindowInsets.navigationBars
