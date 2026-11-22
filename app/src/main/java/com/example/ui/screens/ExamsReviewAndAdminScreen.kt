@@ -69,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.AudioClipRecorder
 import com.example.core.SpeechEngine
 import com.example.data.curriculum.CurriculumCatalog
+import com.example.data.model.SkillType
 import com.example.data.model.CefrLevel
 import com.example.data.model.CmsContentItem
 import com.example.data.model.Dialect
@@ -130,10 +131,10 @@ fun HardCefrExamsScreen(
     }
 
     val listeningQuestions = remember(generatedExam, fallbackQuestions) {
-        generatedExam?.listeningQuestions?.takeIf { it.isNotEmpty() } ?: listOf(fallbackQuestions.first())
+        generatedExam?.listeningQuestions?.takeIf { it.isNotEmpty() } ?: fallbackQuestions.filter { it.skill == SkillType.LISTENING }
     }
     val readingQuestions = remember(generatedExam, fallbackQuestions) {
-        generatedExam?.readingQuestions?.takeIf { it.isNotEmpty() } ?: listOf(fallbackQuestions.last())
+        generatedExam?.readingQuestions?.takeIf { it.isNotEmpty() } ?: fallbackQuestions.filter { it.skill == SkillType.READING }
     }
     val speakingPromptAr = generatedExam?.speakingPromptAr
         ?: "تحدّث بصوتك وأجب بجملتين كاملتين وواضحتين عن موقف الاستماع باللغة المستهدفة:"
@@ -189,7 +190,7 @@ fun HardCefrExamsScreen(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag("cefr_exam_list"),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
