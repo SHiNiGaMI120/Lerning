@@ -11,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 
 private val LingoLightColorScheme = lightColorScheme(
     primary = EmeraldPrimary,
@@ -32,6 +33,11 @@ private val LingoLightColorScheme = lightColorScheme(
     surfaceVariant = WarmSurfaceVariant,
     onSurfaceVariant = MutedOnSurface,
     outline = WarmOutline,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFEEEFFA),
+    surfaceContainer = Color(0xFFE9EBF7),
+    surfaceContainerHigh = Color(0xFFE1E4F2),
+    surfaceContainerHighest = Color(0xFFDADDEA),
     error = ErrorCrimson
 )
 
@@ -55,6 +61,11 @@ private val LingoDarkColorScheme = darkColorScheme(
     surfaceVariant = MidnightSurfaceVariant,
     onSurfaceVariant = CloudMuted,
     outline = MidnightOutline,
+    surfaceContainerLowest = Color(0xFF0B0D1C),
+    surfaceContainerLow = Color(0xFF1B1F36),
+    surfaceContainer = Color(0xFF222740),
+    surfaceContainerHigh = Color(0xFF2B304B),
+    surfaceContainerHighest = Color(0xFF333A56),
     error = DarkErrorCrimson
 )
 
