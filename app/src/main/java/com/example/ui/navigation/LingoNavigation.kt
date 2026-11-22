@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.navigationBars
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +64,7 @@ import com.example.data.model.LessonProgress
 import com.example.data.model.PronunciationLog
 import com.example.data.model.ReviewCard
 import com.example.data.model.UserProfile
+import com.example.ui.screens.LearningNextStepBar
 import com.example.ui.screens.ActiveLessonResume
 import com.example.ui.screens.AdminCmsScreen
 import com.example.ui.screens.AiTutorScreen
@@ -75,6 +79,7 @@ import com.example.ui.screens.PronunciationLabScreen
 import com.example.ui.screens.RealVideosScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SmartReviewFsrsScreen
+import com.example.ui.viewmodel.DataState
 import com.example.ui.viewmodel.AiTutorViewModel
 import com.example.ui.viewmodel.LingoViewModel
 
@@ -382,10 +387,14 @@ fun LingoNavHost(
 ) {
     val isAdmin by lingoViewModel.isAdmin.collectAsStateWithLifecycle()
 
+    val tutorMessagesState by aiViewModel.messagesState.collectAsStateWithLifecycle()
+    val tutorMessages = (tutorMessagesState as? DataState.Success)?.data.orEmpty()
+    val entry by navController.currentBackStackEntryAsState()
+    Column(modifier = modifier) {
     NavHost(
         navController = navController,
         startDestination = LingoDestination.HOME.route,
-        modifier = modifier,
+        modifier = Modifier.weight(1f).fillMaxSize(),
         enterTransition = { fadeIn(animationSpec = tween(200)) },
         exitTransition = { fadeOut(animationSpec = tween(160)) }
     ) {
@@ -397,6 +406,7 @@ fun LingoNavHost(
                 examAttempts = examAttempts,
                 pronunciationLogs = pronunciationLogs,
                 isAdmin = isAdmin,
+                tutorMessages = tutorMessages,
                 onSwitchLanguage = lingoViewModel::switchLanguage,
                 onContinueLastLesson = onContinueLastLesson,
                 onNavigate = { navController.navigateToDestination(it) }
@@ -608,6 +618,8 @@ fun LingoNavHost(
                 onDeleteItem = lingoViewModel::deleteCmsItem
             )
         }
+    }
+    LearningNextStepBar(routeToDestination(entry?.destination?.route)) { navController.navigateToDestination(it) }
     }
 }
 
