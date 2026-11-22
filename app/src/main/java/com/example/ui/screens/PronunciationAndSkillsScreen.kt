@@ -475,7 +475,7 @@ fun FourSkillsHubScreen(
 
                     when (selectedSkill) {
                         SkillType.LISTENING -> {
-                            val sample = CurriculumCatalog.examQuestionsFor(activeLang, activeLevel).first()
+                            val sample = CurriculumCatalog.examQuestionsFor(activeLang, activeLevel).first { it.skill == SkillType.LISTENING }
                             Text("استمع للمقطع الصوتي باللهجة المختارة ثم أعد تشغيله ببطء للتحقق من التفاصيل:")
                             AudioSpeedButtons(
                                 onPlayNormal = { speechEngine.speak(sample.stimulusTarget, activeDialect.code, slow = false) },
@@ -497,7 +497,7 @@ fun FourSkillsHubScreen(
                             }
                         }
                         SkillType.READING -> {
-                            val readingQ = CurriculumCatalog.examQuestionsFor(activeLang, activeLevel).last()
+                            val readingQ = CurriculumCatalog.examQuestionsFor(activeLang, activeLevel).first { it.skill == SkillType.READING }
                             LtrTargetText(readingQ.stimulusTarget, bold = true)
                             Text("اقرأ النص بتركيز ثم انتقل لمكتبة القصص التفاعلية لتدريبات الاستنتاج العميق.")
                             Button(onClick = { onNavigate(LingoDestination.STORIES) }, modifier = Modifier.fillMaxWidth()) {
