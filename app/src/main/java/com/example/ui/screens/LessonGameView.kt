@@ -87,6 +87,7 @@ import com.example.data.model.Dialect
 import com.example.data.model.SentenceLessonItem
 import com.example.ui.components.AudioSpeedButtons
 import com.example.ui.components.LtrTargetText
+import com.example.ui.components.SentenceRevealCard
 import kotlin.random.Random
 
 private data class WordTile(
@@ -210,7 +211,7 @@ fun LessonGameView(
     )
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("lesson_game_list"),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -394,31 +395,7 @@ fun LessonGameView(
                                 fontWeight = FontWeight.Bold
                             )
 
-                            Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    LtrTargetText(item.sentence, bold = true)
-                                    Text(
-                                        text = item.arabicTranslation,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (item.dialectVariantAlt.isNotBlank()) {
-                                        Text(
-                                            text = "صيغة اللهجة الأخرى: ${item.dialectVariantAlt}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
+                            SentenceRevealCard(item.sentence, item.arabicTranslation, item.id)
 
                             AudioSpeedButtons(
                                 onPlayNormal = { speechEngine.speak(item.sentence, dialect.code, slow = false) },

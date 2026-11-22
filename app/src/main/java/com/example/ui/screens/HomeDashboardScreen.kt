@@ -38,6 +38,9 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TrendingUp
+import com.example.ui.components.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -222,301 +225,118 @@ fun HomeDashboardScreen(
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag("home_dashboard_list"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("home_dashboard_list"),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        // 1. Welcoming Greeting Hero Banner
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(172.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .testTag("home_greeting_banner")
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.img_hero_lingo_1795256214321),
-                    contentDescription = "ترحيب منصة LingoWorld AI",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    Color(0xE6063827),
-                                    Color(0xBF0A523B),
-                                    Color(0x8815385A)
-                                )
-                            )
-                        )
-                )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(greetingText, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("خطوة صغيرة. فرق كبير.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                StudioPill("🔥 ${profile.streakDays} يوم", MaterialTheme.colorScheme.secondary)
+            }
+        }
+        item {
+            Card(shape = RoundedCornerShape(32.dp), modifier = Modifier.fillMaxWidth().testTag("home_greeting_banner")) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                    Modifier.background(Brush.linearGradient(listOf(Color(0xFF5755E7), Color(0xFF7560EB), Color(0xFF936BE8)))).padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = greetingText,
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "جاهز لخطوتك اليومية في ${activeLang.arabicName}؟",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.92f)
-                            )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Surface(color = Color.White.copy(alpha = .16f), shape = CircleShape) {
+                            Text("${activeLang.arabicName}  •  ${profile.currentLevelEnum().code}", Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
-                        Spacer(Modifier.size(8.dp))
-                        Surface(
-                            color = Color(0xFFFFB703),
-                            shape = RoundedCornerShape(100.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.LocalFireDepartment,
-                                    contentDescription = "سلسلة الأيام",
-                                    tint = Color(0xFF3B1F00),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "${profile.streakDays} يوم",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF3B1F00)
-                                )
-                            }
-                        }
+                        Text("${dailySteps.count { it }} من ٤ النهارده", color = Color.White.copy(alpha = .88f), style = MaterialTheme.typography.labelMedium)
                     }
-
-                    // Daily Goal & XP Strip inside Greeting Banner
-                    Surface(
-                        color = Color.White.copy(alpha = 0.14f),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            val rankLabel = remember(profile.xp) { resolveLearnerRank(profile.xp) }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "هدفك: $dailyGoalMinutes دقيقة يوميًا",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "$rankLabel • ${profile.xp} XP",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFD166)
-                                )
-                            }
-                            LinearProgressIndicator(
-                                progress = { dailySteps.count { it } / 4f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(100.dp)),
-                                color = Color(0xFFFFD166),
-                                trackColor = Color.White.copy(alpha = 0.25f)
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("كلمة جديدة.\nعالم أكبر.", color = Color.White, fontSize = 30.sp, lineHeight = 40.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(activeLesson.unitTitleAr, color = Color.White.copy(alpha = .84f), style = MaterialTheme.typography.bodySmall)
+                        }
+                        LumoCompanion(Modifier.size(116.dp))
+                    }
+                    Button(onClick = startNextStep, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).testTag("home_next_step_button"),
+                        shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = LingoInk)) {
+                        Text(when (nextIndex) { 0 -> "يلا نبدأ الدرس"; 1 -> "خلّي صوتك أوضح"; 2 -> "جاهز نتكلم؟"; 3 -> "ثبّت اللي اتعلمته"; else -> "شوف إنجازك النهارده" }, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+        }
+        item {
+            StudioSectionTitle("رحلة النهارده", "٤ محطات، على مهلك")
+            Spacer(Modifier.height(14.dp))
+            val labels = listOf("اكتشف", "انطق", "اتكلم", "افتكر")
+            val icons = listOf(Icons.Filled.AutoStories, Icons.Filled.GraphicEq, Icons.Filled.Headphones, Icons.Filled.Replay)
+            val actions: List<() -> Unit> = listOf({ onContinueLastLesson(activeLesson) }, { onNavigate(LingoDestination.PRONUNCIATION) }, { onNavigate(LingoDestination.AI_TUTOR) }, { onNavigate(LingoDestination.REVIEW) })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                labels.forEachIndexed { index, title ->
+                    val current = index == nextIndex
+                    val done = dailySteps[index]
+                    Card(onClick = actions[index], modifier = Modifier.weight(1f).testTag("home_journey_step_$index"), shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerLow)) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 15.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Icon(if (done) Icons.Filled.CheckCircle else icons[index], contentDescription = if (done) "مكتمل" else null,
+                                tint = if (current) MaterialTheme.colorScheme.onPrimary else if (done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp))
+                            Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = if (current) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
             }
         }
-
         item {
-            GuidedDailyJourneyCard(
-                step1Done = dailySteps[0], step2Done = dailySteps[1],
-                step3Done = dailySteps[2], step4Done = dailySteps[3],
-                dueCardsCount = dueCardsCount,
-                onStep1 = { onContinueLastLesson(activeLesson) },
-                onStep2 = { onNavigate(LingoDestination.PRONUNCIATION) },
-                onStep3 = { onNavigate(LingoDestination.AI_TUTOR) },
-                onStep4 = { onNavigate(LingoDestination.REVIEW) },
-                onNextStep = startNextStep
-            )
-        }
-
-        // 3.5 Interactive 30-Second Daily Quick Challenge (instant mini-game on Home)
-        item {
-            DailyQuickChallengeCard(
-                language = activeLang,
-                level = profile.currentLevelEnum(),
-                onPlayFullLesson = { onContinueLastLesson(activeLesson) }
-            )
-        }
-
-        if (isAdmin) {
-            item {
-                OutlinedButton(onClick = { onNavigate(LingoDestination.ADMIN) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("لوحة الإدارة والمحتوى")
+            Card(onClick = { onNavigate(LingoDestination.AI_TUTOR) }, shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = LingoPeach), modifier = Modifier.fillMaxWidth().testTag("home_voice_studio")) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("مساحتك للكلام", style = MaterialTheme.typography.labelSmall, color = LingoInk.copy(alpha = .72f))
+                        Text("اتكلم. اغلط. اتعلّم.", style = MaterialTheme.typography.titleLarge, color = LingoInk, fontWeight = FontWeight.ExtraBold)
+                        Text("مدرس صبور أو كابتن صارم؟ أنت تختار.", style = MaterialTheme.typography.bodySmall, color = LingoInk)
+                    }
+                    Surface(shape = CircleShape, color = LingoInk) { Icon(Icons.Filled.GraphicEq, null, tint = Color.White, modifier = Modifier.padding(16.dp).size(28.dp)) }
                 }
             }
         }
         item {
-            OutlinedButton(onClick = { showExplore = !showExplore }, modifier = Modifier.fillMaxWidth().testTag("home_explore_toggle")) {
-                Text(if (showExplore) "إخفاء الأقسام الإضافية" else "استكشف باقي التطبيق: قصص، فيديوهات، اختبارات")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StudioFeatureCard("$dueCardsCount للمراجعة", "خلي الكلمات تفضل معاك", Icons.Filled.Replay, MaterialTheme.colorScheme.primary,
+                    { onNavigate(LingoDestination.REVIEW) }, Modifier.weight(1f))
+                StudioFeatureCard("${profile.xp} XP", resolveLearnerRank(profile.xp), Icons.Filled.EmojiEvents, MaterialTheme.colorScheme.secondary,
+                    { onNavigate(LingoDestination.PROGRESS) }, Modifier.weight(1f))
+            }
+        }
+        item { DailyQuickChallengeCard(activeLang, profile.currentLevelEnum()) { onContinueLastLesson(activeLesson) } }
+        if (isAdmin) item {
+            TextButton(onClick = { onNavigate(LingoDestination.ADMIN) }, modifier = Modifier.fillMaxWidth()) { Text("لوحة الإدارة والمحتوى") }
+        }
+        item {
+            OutlinedButton(onClick = { showExplore = !showExplore }, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth().testTag("home_explore_toggle")) {
+                Text(if (showExplore) "إخفاء الأقسام الإضافية" else "استكشف عالمك: قصص، فيديوهات، اختبارات", style = MaterialTheme.typography.labelMedium)
             }
         }
         if (showExplore) {
-        // 4. Quick Overview of Current Language Progress (English & Spanish)
-        item {
-            SectionHeader(
-                title = stringResource(R.string.home_languages_title),
-                subtitle = stringResource(R.string.home_languages_subtitle),
-                badge = "${enLessonsDone + esLessonsDone} درس"
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                LanguageTrackCard(
-                    title = "الإنجليزية",
-                    dialect = if (profile.englishDialect == "en-GB") "بريطانية UK" else "أمريكية US",
-                    level = profile.englishLevel,
-                    subLevel = profile.englishSubLevel.toInt().coerceIn(1, 10),
-                    lessonsDone = enLessonsDone,
-                    accent = EnglishRoyalBlue,
-                    selected = activeLang == TargetLanguage.EN,
-                    onClick = {
-                        onSwitchLanguage(TargetLanguage.EN)
-                        onNavigate(LingoDestination.LEARNING)
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("track_english_card")
-                )
-                LanguageTrackCard(
-                    title = "الإسبانية",
-                    dialect = if (profile.spanishDialect == "es-MX") "لاتينية MX" else "أوروبية ES",
-                    level = profile.spanishLevel,
-                    subLevel = profile.spanishSubLevel.toInt().coerceIn(1, 10),
-                    lessonsDone = esLessonsDone,
-                    accent = SpanishTerracotta,
-                    selected = activeLang == TargetLanguage.ES,
-                    onClick = {
-                        onSwitchLanguage(TargetLanguage.ES)
-                        onNavigate(LingoDestination.LEARNING)
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("track_spanish_card")
-                )
+            item {
+                StudioSectionTitle("اختار مغامرتك", "نفس الهدف، بأكتر من طريقة")
+                Spacer(Modifier.height(12.dp))
+                FeatureTileGrid(listOf(
+                    Triple(LingoDestination.STORIES, Icons.Filled.AutoStories, "عيش الحكاية واختر نهايتها"),
+                    Triple(LingoDestination.VIDEOS, Icons.Filled.OndemandVideo, "اسمع اللغة في الحياة"),
+                    Triple(LingoDestination.SKILLS, Icons.Filled.Bolt, "تمرّن على المهارات الأربع"),
+                    Triple(LingoDestination.TESTS, Icons.Filled.FactCheck, "اختبر اللي اتعلمته"),
+                    Triple(LingoDestination.SETTINGS, Icons.Filled.Settings, "لغتك ولهجتك على ذوقك")
+                ), onNavigate)
             }
-        }
-
-        // 5. Compact Daily Metrics Row
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatMiniCard(
-                    icon = Icons.Filled.Replay,
-                    value = "$dueCardsCount",
-                    label = "مراجعة FSRS",
-                    onClick = { onNavigate(LingoDestination.REVIEW) },
-                    modifier = Modifier.weight(1f)
-                )
-                StatMiniCard(
-                    icon = Icons.Filled.Headphones,
-                    value = "${profile.listeningMinutes} د",
-                    label = "الاستماع",
-                    onClick = { onNavigate(LingoDestination.VIDEOS) },
-                    modifier = Modifier.weight(1f)
-                )
-                StatMiniCard(
-                    icon = Icons.Filled.GraphicEq,
-                    value = if (avgPronunciation > 0) "$avgPronunciation%" else "جديد",
-                    label = "دقة النطق",
-                    onClick = { onNavigate(LingoDestination.PRONUNCIATION) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // 6. Logically Grouped Learning Hub (3 clear categories instead of a crowded grid)
-        item {
-            SectionHeader(
-                title = "1) التعلّم والاستيعاب",
-                subtitle = "ابدأ بالمسار التفاعلي ثم طبّق بالقصص والفيديوهات"
-            )
-            Spacer(Modifier.height(8.dp))
-            FeatureTileGrid(
-                items = listOf(
-                    Triple(LingoDestination.LEARNING, Icons.Filled.MenuBook, "خريطة المراحل ولعبة الجمل"),
-                    Triple(LingoDestination.STORIES, Icons.Filled.AutoStories, "قصص تفاعلية + AI"),
-                    Triple(LingoDestination.VIDEOS, Icons.Filled.OndemandVideo, "فيديوهات YouTube حقيقية")
-                ),
-                onNavigate = onNavigate
-            )
-        }
-
-        item {
-            SectionHeader(
-                title = "2) الممارسة والتحدث الحي",
-                subtitle = "تكلّم بصوتك واحصل على تصحيح فوري"
-            )
-            Spacer(Modifier.height(8.dp))
-            FeatureTileGrid(
-                items = listOf(
-                    Triple(LingoDestination.AI_TUTOR, Icons.Filled.AutoAwesome, "محادثة + تقييم الأخطاء"),
-                    Triple(LingoDestination.PRONUNCIATION, Icons.Filled.GraphicEq, "سجّل صوتك ودرّب نطقك"),
-                    Triple(LingoDestination.SKILLS, Icons.Filled.Bolt, "تدريبات المهارات الأربع")
-                ),
-                onNavigate = onNavigate
-            )
-        }
-
-        item {
-            SectionHeader(
-                title = "3) التثبيت والاختبارات",
-                subtitle = "راجع ما حفظته وارتقِ لمستوى CEFR الأعلى"
-            )
-            Spacer(Modifier.height(8.dp))
-            val evaluationItems = buildList {
-                add(Triple(LingoDestination.REVIEW, Icons.Filled.Replay, "بطاقات المراجعة الذكية"))
-                add(Triple(LingoDestination.TESTS, Icons.Filled.FactCheck, "اختبارات CEFR والشهادة"))
-                add(Triple(LingoDestination.SETTINGS, Icons.Filled.Settings, "اللهجة والهدف والمظهر"))
-                if (isAdmin) {
-                    add(Triple(LingoDestination.ADMIN, Icons.Filled.AdminPanelSettings, "لوحة الإدارة والمحتوى"))
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LanguageTrackCard("الإنجليزية", if (profile.englishDialect == "en-GB") "بريطانية UK" else "أمريكية US", profile.englishLevel, profile.englishSubLevel.toInt().coerceIn(1, 10), enLessonsDone, EnglishRoyalBlue, activeLang == TargetLanguage.EN,
+                        { onSwitchLanguage(TargetLanguage.EN); onNavigate(LingoDestination.LEARNING) }, Modifier.weight(1f).testTag("track_english_card"))
+                    LanguageTrackCard("الإسبانية", if (profile.spanishDialect == "es-MX") "لاتينية MX" else "أوروبية ES", profile.spanishLevel, profile.spanishSubLevel.toInt().coerceIn(1, 10), esLessonsDone, SpanishTerracotta, activeLang == TargetLanguage.ES,
+                        { onSwitchLanguage(TargetLanguage.ES); onNavigate(LingoDestination.LEARNING) }, Modifier.weight(1f).testTag("track_spanish_card"))
                 }
             }
-            FeatureTileGrid(items = evaluationItems, onNavigate = onNavigate)
         }
-    }
     }
 }
 
